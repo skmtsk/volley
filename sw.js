@@ -1,5 +1,5 @@
-// オフライン対応: 一度開いたら電波がなくても起動できるようにキャッシュする
-const CACHE = 'volley-rec-v1.0.0';
+// オフライン対応: 電波があるときは最新版を取りに行き、ないときは保存した版で起動する
+const CACHE = 'volley-rec-v1.1.0';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
@@ -11,9 +11,14 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(e.request, {ignoreSearch: true});
-    const net = fetch(e.request).then(r => { if (r && r.ok) c.put(e.request, r.clone()); return r; }).catch(() => null);
-    return hit || (await net) || c.match('./index.html');
-  }));
+  e.respondWith((async () => {
+    const c = await caches.open(CACHE);
+    try {
+      const r = await fetch(e.request, {cache: 'no-cache'});
+      if (r && r.ok) c.put(e.request, r.clone());
+      return r;
+    } catch (err) {
+      return (await c.match(e.request, {ignoreSearch: true})) || (await c.match('./index.html'));
+    }
+  })());
 });
