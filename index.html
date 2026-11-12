@@ -150,7 +150,7 @@ nav#nav svg{width:24px;height:24px}
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 <script>
 'use strict';
-const APPV='1.1.0';
+const APPV='1.2.0';
 const STORE='volleyRec.v1';
 const POS9=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト'];
 // key, label, 得失, 分類, 選手入力(req=必須/opt=任意/auto=サーバー自動/none=不要/sub), 表示(any/self=自サーブ中/opp=相手サーブ中), 限定(nine/practice)
@@ -200,10 +200,35 @@ const plabel=(k,nine)=>k==='serve_miss'?(nine?'サーブ2本目ミス':'サー�
 const ruleLabel=m=>(isNine(m)?'9人制':'6人制小学生')+' '+(m.kind==='official'?'公式戦':'練習試合');
 
 /* ---------- storage ---------- */
-function blankDB(){return {v:1,team:'',players:[],matches:[]}}
-function load(){try{const s=localStorage.getItem(STORE);if(s){const d=JSON.parse(s);if(d&&Array.isArray(d.matches))return Object.assign(blankDB(),d);}}catch(e){}return blankDB();}
+function blankDB(){return {v:2,teams:[],matches:[]}}
+function newTeam(name){return {id:uid(),name:name||'チーム'+(DB&&DB.teams?DB.teams.length+1:1),players:[]}}
+function migrate(d){
+ if(!Array.isArray(d.teams)){d.teams=[];if((d.players&&d.players.length)||d.team)d.teams.push({id:uid(),name:d.team||'チーム1',players:d.players||[]});}
+ delete d.players;delete d.team;
+ if(!d.teams.length)d.teams.push({id:uid(),name:'チーム1',players:[]});
+ d.matches.forEach(m=>{if(!m.teamId||!d.teams.some(t=>t.id===m.teamId))m.teamId=d.teams[0].id;});
+ d.v=2;return d;
+}
+function load(){try{const s=localStorage.getItem(STORE);if(s){const d=JSON.parse(s);if(d&&Array.isArray(d.matches))return migrate(d);}}catch(e){}return migrate(blankDB());}
 let DB=load();
 let saveFail=false;
+const UIKEY='volleyRec.ui';
+const teamOf=id=>DB.teams.find(t=>t.id===id)||DB.teams[0];
+const teamName=id=>(DB.teams.find(t=>t.id===id)||{}).name||'';
+function periodRange(v){const d=new Date(),ym=(y,m)=>`${y}-${String(m).padStart(2,'0')}-01`;
+ if(v==='m1')return [ym(d.getFullYear(),d.getMonth()+1),''];
+ if(v==='m3'){const x=new Date(d.getFullYear(),d.getMonth()-2,1);return [ym(x.getFullYear(),x.getMonth()+1),''];}
+ if(v==='y')return [`${d.getFullYear()}-01-01`,''];
+ if(v==='py')return [`${d.getFullYear()-1}-01-01`,`${d.getFullYear()-1}-12-31`];
+ return ['',''];}
+function matchFilter(m,f){
+ if(f.team&&f.team!=='all'&&m.teamId!==f.team)return false;
+ if(f.rule!=='all'&&m.rule!==f.rule)return false;
+ if(f.kind!=='all'&&m.kind!==f.kind)return false;
+ if(f.from&&(m.date||'')<f.from)return false;
+ if(f.to&&(m.date||'')>f.to)return false;
+ return true;}
+function saveUI(){try{localStorage.setItem(UIKEY,JSON.stringify({hf:UI.hf,agg:UI.agg,tid:UI.tid}))}catch(e){}}
 function save(){try{localStorage.setItem(STORE,JSON.stringify(DB));saveFail=false;}catch(e){if(!saveFail)toast('保存できませんでした。データの保存先を確認してください');saveFail=true;}}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
 
@@ -333,19 +358,43 @@ function summaryText(title,rows,sums,nine){
 }
 
 /* ---------- UI state ---------- */
-const UI={logAll:false,tab:'home',mid:null,mtab:'rec',open:0,aset:'all',agg:{rule:'nine',kind:'all',from:'',to:'',opp:''},sheet:null,wake:false};
+const UI={hf:{team:'all',rule:'all',kind:'all',period:'all',from:'',to:''},tid:null,logAll:false,tab:'home',mid:null,mtab:'rec',open:0,aset:'all',agg:{team:'all',rule:'nine',kind:'all',period:'all',from:'',to:'',opp:''},sheet:null,wake:false};
 function curM(){return DB.matches.find(m=>m.id===UI.mid)}
+try{const u=JSON.parse(localStorage.getItem(UIKEY)||'null');if(u){if(u.hf)Object.assign(UI.hf,u.hf);if(u.agg)Object.assign(UI.agg,u.agg);if(u.tid)UI.tid=u.tid;}}catch(e){}
+function fixUI(){const ok=id=>id==='all'||DB.teams.some(t=>t.id===id);if(!ok(UI.hf.team))UI.hf.team='all';if(!ok(UI.agg.team))UI.agg.team='all';if(!DB.teams.some(t=>t.id===UI.tid))UI.tid=DB.teams[0].id;}
+fixUI();
+if(DB.teams.length>1&&UI.agg.team==='all')UI.agg.team=DB.teams[0].id;
 function touch(m){m.updated=Date.now();save();}
 let toastT;function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),1600);}
 
 /* ---------- views ---------- */
+function filterUI(f,key){
+ let h='';
+ if(DB.teams.length>1)h+=`<div class="tabs" style="margin-bottom:8px">${[['all','全チーム'],...DB.teams.map(t=>[t.id,t.name])].map(x=>`<button class="${f.team===x[0]?'on':''}" data-act="flt" data-f="${key}" data-k="team" data-v="${x[0]}">${esc(x[1])}</button>`).join('')}</div>`;
+ h+=`<div class="seg">${[['all','すべて'],['nine','9人制'],['six','6人制小学生']].map(x=>`<button class="${f.rule===x[0]?'on':''}" data-act="flt" data-f="${key}" data-k="rule" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+ h+=`<div class="seg" style="margin-top:6px">${[['all','すべて'],['official','公式戦'],['practice','練習試合']].map(x=>`<button class="${f.kind===x[0]?'on':''}" data-act="flt" data-f="${key}" data-k="kind" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+ h+=`<div class="tabs" style="margin:8px -16px 0">${[['all','全期間'],['m1','今月'],['m3','3か月'],['y','今年'],['py','去年'],['custom','期間を指定']].map(x=>`<button class="${f.period===x[0]?'on':''}" data-act="fper" data-f="${key}" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+ if(f.period==='custom')h+=`<div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>いつから</span><input type="date" value="${esc(f.from)}" data-ch="fdate" data-f="${key}" data-k="from"></label><label class="f" style="margin:0"><span>いつまで</span><input type="date" value="${esc(f.to)}" data-ch="fdate" data-f="${key}" data-k="to"></label></div>`;
+ return h;
+}
+function rangeText(f){return (f.from||f.to)?`${fmtD(f.from)||'最初'} 〜 ${fmtD(f.to)||'今日'}`:'全期間'}
 function vHome(){
+ const f=UI.hf;
  let h='<div class="top"><h1>試合</h1><button class="btn pri sm" data-act="newMatch">＋ 新しい試合</button></div>';
- if(!DB.players.length)h+='<div class="banner w">はじめに「メンバー」でチームの選手を登録してください。</div>';
- const list=DB.matches.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.created-a.created);
- if(!list.length)return h+'<div class="empty">まだ試合がありません。<br>「＋ 新しい試合」から始めましょう。</div>';
- list.forEach(m=>{const R=replay(m);const res=resultLabel(m,R);const cls=/勝ち/.test(res)?'g':/負け/.test(res)?'l':'';const op=oppsOf(m);
-  h+=`<button class="card mcard" data-act="openMatch" data-id="${m.id}"><div class="row" style="justify-content:space-between"><span class="sub" style="flex:0 0 auto">${esc(fmtD(m.date))}</span><span style="flex:0 0 auto"><span class="pill">${esc(ruleLabel(m))}</span></span></div><div class="t">${esc(m.title||'(名称なし)')}</div><div class="row" style="justify-content:space-between"><span class="sub">${op.length?'vs '+esc(op.join('・')):''}</span><span style="flex:0 0 auto" class="pill ${cls}">${esc(res)}</span></div></button>`;});
+ if(!DB.teams.some(t=>t.players.length))h+='<div class="banner w">はじめに「メンバー」でチームの選手を登録してください。</div>';
+ if(!DB.matches.length)return h+'<div class="empty">まだ試合がありません。<br>「＋ 新しい試合」から始めましょう。</div>';
+ h+='<div class="card">'+filterUI(f,'hf')+'</div>';
+ const list=DB.matches.filter(m=>matchFilter(m,f)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.created-a.created);
+ const nOff=list.filter(m=>m.kind==='official').length;
+ h+=`<div class="row" style="justify-content:space-between;margin:4px 0 2px"><span class="sub">${esc(rangeText(f))}・${list.length}試合(公式戦${nOff}・練習試合${list.length-nOff})</span>${list.length?`<button class="btn sm" style="flex:0 0 auto" data-act="toAgg">この条件で集計 ›</button>`:''}</div>`;
+ if(!list.length)return h+'<div class="empty">条件に合う試合がありません。</div>';
+ let cur='';
+ list.forEach(m=>{
+  const mk=(m.date||'').slice(0,7);
+  if(mk!==cur){cur=mk;const g=list.filter(x=>(x.date||'').slice(0,7)===mk);let sw=0,sl=0;g.forEach(x=>replay(x).sums.forEach(t=>{if(t.done&&t.res==='○')sw++;else if(t.done&&t.res==='×')sl++;}));
+   h+=`<h2 style="display:flex;justify-content:space-between;align-items:baseline">${mk?esc(mk.slice(0,4)+'年'+(+mk.slice(5))+'月'):'日付なし'}<span class="sub" style="font-weight:600">${g.length}試合・セット${sw}勝${sl}敗</span></h2>`;}
+  const R=replay(m);const res=resultLabel(m,R);const cls=/勝ち/.test(res)?'g':/負け/.test(res)?'l':'';const op=oppsOf(m);
+  h+=`<button class="card mcard" data-act="openMatch" data-id="${m.id}"><div class="row" style="justify-content:space-between"><span class="sub" style="flex:0 0 auto">${esc(fmtD(m.date))}</span><span style="flex:0 0 auto">${DB.teams.length>1?`<span class="pill">${esc(teamName(m.teamId))}</span> `:''}<span class="pill">${esc(ruleLabel(m))}</span></span></div><div class="t">${esc(m.title||'(名称なし)')}</div><div class="row" style="justify-content:space-between"><span class="sub">${op.length?'vs '+esc(op.join('・')):''}</span><span style="flex:0 0 auto" class="pill ${cls}">${esc(res)}</span></div></button>`;});
  return h;
 }
 function vMatch(){
@@ -429,9 +478,9 @@ function vSetup(m){
  h+=`<label class="f"><span>日付</span><input type="date" value="${esc(m.date)}" data-ch="mf" data-k="date"></label>`;
  h+=`<label class="f"><span>${m.kind==='official'?'大会名・試合名':'会場・練習名'}</span><input value="${esc(m.title)}" placeholder="${m.kind==='official'?'例) 秋季大会 1回戦':'例) ○○小 練習試合'}" data-ch="mf" data-k="title"></label>`;
  h+=`<label class="f"><span>${m.kind==='official'?'対戦相手':'対戦相手(セットごとに変えられます)'}</span><input value="${esc(m.opp)}" placeholder="例) ○○クラブ" data-ch="mf" data-k="opp"></label></div>`;
- h+='<h2>この試合のメンバー</h2><div class="card">';
+ h+=`<h2>この試合のメンバー${DB.teams.length>1?' <span class="pill">'+esc(teamName(m.teamId))+'</span>':''}</h2><div class="card">`;
  const ids=new Set(m.members.map(p=>p.id));
- const all=[...m.members];DB.players.forEach(p=>{if(!ids.has(p.id)&&!m.members.some(x=>x.name===p.name))all.push(p);});
+ const all=[...m.members];teamOf(m.teamId).players.forEach(p=>{if(!ids.has(p.id)&&!m.members.some(x=>x.name===p.name))all.push(p);});
  if(!all.length)h+='<p class="sub">「メンバー」画面で選手を登録するか、下の欄から追加してください。</p>';
  all.forEach(p=>{h+=`<label class="row" style="padding:4px 0"><input type="checkbox" style="flex:0 0 22px" data-ch="memToggle" data-id="${p.id}" ${ids.has(p.id)?'checked':''}><span>${esc(p.name)} <span class="sub">${p.num!==''&&p.num!=null?'#'+esc(p.num):''} ${esc(p.pos||'')}</span></span></label>`;});
  h+=`<div class="row" style="margin-top:8px"><input id="guestName" placeholder="この試合だけの選手を追加(名前)"><button class="btn sm" style="flex:0 0 auto" data-act="addGuest">追加</button></div></div>`;
@@ -460,10 +509,7 @@ function vSetup(m){
 function aggRows(){
  const f=UI.agg;let rows=[],sums=[],mc=0;const opps=new Set();
  DB.matches.forEach(m=>{
-  if(f.rule!=='all'&&m.rule!==f.rule)return;
-  if(f.kind!=='all'&&m.kind!==f.kind)return;
-  if(f.from&&(m.date||'')<f.from)return;
-  if(f.to&&(m.date||'')>f.to)return;
+  if(!matchFilter(m,f))return;
   const R=replay(m);R.rows.forEach(r=>{if(r.opp)opps.add(r.opp)});
   let rr=R.rows,ss=R.sums.map(s=>Object.assign({date:m.date,m},s));
   if(f.opp){rr=rr.filter(r=>r.opp===f.opp);ss=ss.filter(s=>s.opp===f.opp);}
@@ -473,20 +519,18 @@ function aggRows(){
 }
 function vAgg(){
  const f=UI.agg;
- let h='<div class="top"><h1>集計</h1></div><div class="card noprint">';
- h+=`<div class="seg">${[['nine','9人制'],['six','6人制小学生'],['all','すべて']].map(x=>`<button class="${f.rule===x[0]?'on':''}" data-act="af" data-k="rule" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
- h+=`<div class="seg" style="margin-top:6px">${[['all','公式+練習'],['official','公式戦'],['practice','練習試合']].map(x=>`<button class="${f.kind===x[0]?'on':''}" data-act="af" data-k="kind" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
- h+=`<div class="row" style="margin-top:8px"><label class="f" style="margin:0"><span>いつから</span><input type="date" value="${esc(f.from)}" data-ch="af" data-k="from"></label><label class="f" style="margin:0"><span>いつまで</span><input type="date" value="${esc(f.to)}" data-ch="af" data-k="to"></label></div>`;
- h+=`<div class="row" style="margin-top:6px">${[['m1','今月'],['m3','3か月'],['y','今年'],['all','全期間']].map(x=>`<button class="btn sm" data-act="period" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+ let h='<div class="top"><h1>集計</h1></div><div class="card noprint">'+filterUI(f,'agg');
  const A=aggRows();
  h+=`<label class="f"><span>対戦相手</span><select data-ch="af" data-k="opp"><option value="">すべて</option>${A.opps.map(o=>`<option ${f.opp===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label></div>`;
- const rangeTxt=(f.from||f.to)?`${fmtD(f.from)||'最初'} 〜 ${fmtD(f.to)||'今日'}`:'全期間';
+ const rangeTxt=rangeText(f)+(f.team!=='all'&&DB.teams.length>1?'・'+teamName(f.team):'');
  h+=`<div class="print-only"><h1>集計 ${esc(rangeTxt)}</h1></div>`;
+ if(f.rule==='all'&&DB.matches.some(m=>m.rule==='six')&&DB.matches.some(m=>m.rule!=='six'))h+='<div class="banner w">9人制と6人制が混ざっています。選手別・サーブ順別を見るときは、どちらかに絞るのがおすすめです。</div>';
+ if(f.team==='all'&&DB.teams.length>1)h+='<div class="banner w">複数のチームが混ざっています。上でチームを選ぶと、そのチームだけの成績になります。</div>';
  if(!A.rows.length)return h+'<div class="empty">条件に合う記録がありません。</div>';
  const done=A.sums.filter(s=>s.done);const sw=done.filter(s=>s.res==='○').length,sl=done.filter(s=>s.res==='×').length;
  h+=`<p class="sub">${esc(rangeTxt)}${f.opp?'・vs '+esc(f.opp):''}・${A.mc}試合・セット ${sw}勝${sl}敗</p>`;
  const nine=f.rule!=='six';
- h+=vStats(A.rows,null,{nine,n:nine?9:6});
+ h+=vStats(A.rows,null,{nine,n:f.rule==='six'?6:9});
  if(!f.opp&&A.opps.length){
   h+='<h2>対戦相手別</h2><div class="tbl"><table><tr><th>相手</th><th>セット</th><th>勝-敗</th><th>得点-失点</th><th>サイドアウト率</th><th>ブレイク率</th></tr>';
   A.opps.forEach(o=>{const rr=A.rows.filter(r=>r.opp===o),ss=A.sums.filter(s=>s.opp===o&&s.done);const S=calc(rr);
@@ -498,20 +542,24 @@ function vAgg(){
  return h;
 }
 function vTeam(){
- let h='<div class="top"><h1>メンバー</h1></div>';
- h+=`<div class="card"><label class="f" style="margin:0"><span>チーム名</span><input value="${esc(DB.team)}" placeholder="例) ○○ママさんバレー" data-ch="team"></label></div>`;
+ const t=teamOf(UI.tid);
+ let h='<div class="top"><h1>メンバー</h1><button class="btn sm" data-act="addTeam">＋ チーム追加</button></div>';
+ h+=`<div class="tabs">${DB.teams.map(x=>`<button class="${x.id===t.id?'on':''}" data-act="selTeam" data-v="${x.id}">${esc(x.name)} <span style="opacity:.7">${x.players.length}人</span></button>`).join('')}</div>`;
+ const used=DB.matches.filter(m=>m.teamId===t.id).length;
+ h+=`<div class="card"><label class="f" style="margin:0"><span>チーム名</span><input value="${esc(t.name)}" placeholder="例) ○○ママさんバレー" data-ch="team"></label><p class="sub" style="margin-top:8px">このチームの試合: ${used}件</p></div>`;
  h+='<div class="card"><div class="prow sub" style="font-size:12px"><span>背番号</span><span>名前</span><span>ポジション・メモ</span><span></span></div>';
- DB.players.forEach(p=>{h+=`<div class="prow"><input inputmode="numeric" value="${esc(p.num)}" data-ch="pf" data-id="${p.id}" data-k="num"><input value="${esc(p.name)}" data-ch="pf" data-id="${p.id}" data-k="name"><input list="poslist" value="${esc(p.pos||'')}" data-ch="pf" data-id="${p.id}" data-k="pos"><button class="x" data-act="delPlayer" data-id="${p.id}" aria-label="削除">✕</button></div>`;});
- if(!DB.players.length)h+='<p class="sub">まだ選手がいません。</p>';
+ t.players.forEach(p=>{h+=`<div class="prow"><input inputmode="numeric" value="${esc(p.num)}" data-ch="pf" data-id="${p.id}" data-k="num"><input value="${esc(p.name)}" data-ch="pf" data-id="${p.id}" data-k="name"><input list="poslist" value="${esc(p.pos||'')}" data-ch="pf" data-id="${p.id}" data-k="pos"><button class="x" data-act="delPlayer" data-id="${p.id}" aria-label="削除">✕</button></div>`;});
+ if(!t.players.length)h+='<p class="sub">まだ選手がいません。</p>';
  h+=`<button class="btn block" data-act="addPlayer">＋ 選手を追加</button></div><datalist id="poslist">${POS9.map(x=>`<option value="${x}">`).join('')}</datalist>`;
- h+='<p class="sub">ここで登録した選手が、新しい試合のメンバー候補になります。過去の試合の名前は変わりません(名前は重複しないようにしてください)。</p>';
+ h+='<p class="sub">登録した選手が、このチームの新しい試合のメンバー候補になります。過去の試合の名前は変わりません。同じチームの中では名前が重ならないようにしてください。</p>';
+ if(DB.teams.length>1)h+=`<button class="btn sm danger" style="margin-top:8px" data-act="delTeam">このチームを削除</button>`;
  return h;
 }
 function vData(){
  const size=(()=>{try{return Math.round((localStorage.getItem(STORE)||'').length/1024)}catch(e){return 0}})();
  let h='<div class="top"><h1>データ</h1></div>';
  h+='<h2>他の人との共有</h2><div class="card"><p>試合データはこのiPhoneの中に保存されます。記録した人が「試合データを送る」でファイルを送り、受け取った人がここで読み込むと、同じ試合を分析できます。同じ試合は新しい方に置き換わります。</p><button class="btn pri block" data-act="pickFile">ファイルを読み込む</button></div>';
- h+=`<h2>バックアップ</h2><div class="card"><p class="sub">${DB.matches.length}試合・${DB.players.length}人(約${size}KB)。機種変更や万一に備えて、ときどき保存してください。</p><div class="pgrid"><button class="btn" data-act="backup">全データを保存</button><button class="btn" data-act="csvAll">全記録をCSV</button></div></div>`;
+ h+=`<h2>バックアップ</h2><div class="card"><p class="sub">${DB.teams.length}チーム・${DB.matches.length}試合(約${size}KB)。機種変更や万一に備えて、ときどき保存してください。</p><div class="pgrid"><button class="btn" data-act="backup">全データを保存</button><button class="btn" data-act="csvAll">全記録をCSV</button></div></div>`;
  h+='<h2>このアプリについて</h2><div class="card"><p class="sub">バレー記録 v'+APPV+'。9人制(公式戦・練習試合)と6人制小学生ルールに対応。ホーム画面に追加して使うと、電波がなくても動きます。Safariで開いたときとホーム画面から開いたときでは、保存場所が別になります。</p><button class="btn danger sm" data-act="wipe">全データを削除</button></div>';
  return h;
 }
@@ -549,7 +597,7 @@ function renderSheet(){
   h+=`<div class="ptitle"><b>その他</b></div><div class="pgrid">${['serve1','sub','set_end'].map(k=>b(k,'n')).join('')}</div>`;
   h+='<button class="btn block" style="margin-top:12px" data-act="closeSheet">やめる</button>';
  }else if(s.type==='newMatch'){
-  h+=`<h2>新しい試合</h2><label class="f"><span>種類</span><div class="seg">${[['nine','9人制'],['six','6人制小学生']].map(x=>`<button class="${s.rule===x[0]?'on':''}" data-act="nmRule" data-v="${x[0]}">${x[1]}</button>`).join('')}</div></label><label class="f"><span>試合の形式</span><div class="seg">${[['official','公式戦'],['practice','練習試合']].map(x=>`<button class="${s.kind===x[0]?'on':''}" data-act="nmKind" data-v="${x[0]}">${x[1]}</button>`).join('')}</div></label><p class="sub">${s.kind==='official'?'3セットマッチ(2セット先取)・デュースあり。目標点は後から変えられます。':'セットは何本でも追加でき、セットごとに対戦相手を変えられます。'}</p><div class="row" style="margin-top:12px"><button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="createMatch">作成する</button></div>`;
+  h+=`<h2>新しい試合</h2>${DB.teams.length>1?`<label class="f"><span>チーム</span><select data-ch="nmTeam">${DB.teams.map(t=>`<option value="${t.id}" ${s.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>`:''}<label class="f"><span>種類</span><div class="seg">${[['nine','9人制'],['six','6人制小学生']].map(x=>`<button class="${s.rule===x[0]?'on':''}" data-act="nmRule" data-v="${x[0]}">${x[1]}</button>`).join('')}</div></label><label class="f"><span>試合の形式</span><div class="seg">${[['official','公式戦'],['practice','練習試合']].map(x=>`<button class="${s.kind===x[0]?'on':''}" data-act="nmKind" data-v="${x[0]}">${x[1]}</button>`).join('')}</div></label><p class="sub">${s.kind==='official'?'3セットマッチ(2セット先取)・デュースあり。目標点は後から変えられます。':'セットは何本でも追加でき、セットごとに対戦相手を変えられます。'}</p><div class="row" style="margin-top:12px"><button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="createMatch">作成する</button></div>`;
  }else if(s.type==='ev'){
   const R=replay(m);const r=R.rows.find(x=>x.i===s.i);if(!r){UI.sheet=null;el.innerHTML='';return;}
   const nine=isNine(m),p=P[r.k];const who=r.k==='sub'?nm(m,r.out)+' → '+nm(m,r.inn):nm(m,r.who);
@@ -577,10 +625,11 @@ function closeSheet(){UI.sheet=null;renderSheet();}
 function commit(k,p,inn){const m=curM();m.events.push({k,p:p||null,in:inn||null,t:Date.now()});touch(m);UI.sheet=null;render();
  const R=replay(m),r=R.lastRow;if(!r)return;const who=r.k==='sub'?`${nm(m,r.out)}→${nm(m,r.inn)}`:nm(m,r.who);
  toast(`${r.res==='得'?'＋1 ':r.res==='失'?'相手＋1 ':''}${plabel(k,isNine(m))}${who?' '+who:''}  ${r.us}-${r.them}`);}
-function newMatchObj(rule,kind){
- const m={id:uid(),rule,kind,date:today(),title:'',opp:'',members:DB.players.map(p=>({id:p.id,num:p.num,name:p.name,pos:p.pos||''})),sets:[],events:[],created:Date.now(),updated:Date.now()};
+function newMatchObj(rule,kind,teamId){
+ const T=teamOf(teamId);
+ const m={id:uid(),teamId:T.id,rule,kind,date:today(),title:'',opp:'',members:T.players.map(p=>({id:p.id,num:p.num,name:p.name,pos:p.pos||''})),sets:[],events:[],created:Date.now(),updated:Date.now()};
  const cnt=kind==='official'?3:1;for(let i=0;i<cnt;i++)m.sets.push(blankSet(m,i));
- const prev=DB.matches.filter(x=>x.rule===rule).sort((a,b)=>b.created-a.created)[0];
+ const prev=DB.matches.filter(x=>x.rule===rule&&x.teamId===T.id).sort((a,b)=>b.created-a.created)[0];
  if(prev&&prev.sets[0]){const ids=new Set(m.members.map(p=>p.id));const ok=id=>ids.has(id)?id:'';m.sets.forEach(s=>{s.order=prev.sets[0].order.map(ok);if(isNine(m))s.pos=(prev.sets[0].pos||[]).map(ok);});}
  return m;
 }
@@ -591,21 +640,26 @@ function shareFile(name,text,mime){
 }
 function shareText(t){if(navigator.share){navigator.share({text:t}).catch(()=>{});return;}try{navigator.clipboard.writeText(t);toast('コピーしました');}catch(e){prompt('コピーしてください',t);}}
 const fileSafe=s=>String(s||'').replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,40);
-function matchPayload(ms){return JSON.stringify({app:'volley-rec',v:1,type:'matches',exported:Date.now(),matches:ms.map(m=>{const c=Object.assign({},m);return c;})});}
+function matchPayload(ms){const ids=[...new Set(ms.map(m=>m.teamId))];return JSON.stringify({app:'volley-rec',v:2,type:'matches',exported:Date.now(),teams:DB.teams.filter(t=>ids.includes(t.id)),matches:ms});}
 function csvOf(ms){
  const q=v=>{v=String(v??'');return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
- const L=[['日付','試合','種類','セット','相手','No','プレー','得失','分類','選手','入った選手','サーバー','サーブ順','サーブ側','自','相'].join(',')];
- ms.forEach(m=>{replay(m).rows.forEach((r,j)=>{L.push([fmtD(m.date),m.title,ruleLabel(m),r.set,r.opp,j+1,plabel(r.k,isNine(m)),r.res,r.cls,r.k==='sub'?nm(m,r.out):nm(m,r.who),r.k==='sub'?nm(m,r.inn):'',nm(m,r.server),r.slot,r.side,r.us,r.them].map(q).join(','));});});
+ const L=[['チーム','日付','試合','種類','セット','相手','No','プレー','得失','分類','選手','入った選手','サーバー','サーブ順','サーブ側','自','相'].join(',')];
+ ms.forEach(m=>{replay(m).rows.forEach((r,j)=>{L.push([teamName(m.teamId),fmtD(m.date),m.title,ruleLabel(m),r.set,r.opp,j+1,plabel(r.k,isNine(m)),r.res,r.cls,r.k==='sub'?nm(m,r.out):nm(m,r.who),r.k==='sub'?nm(m,r.inn):'',nm(m,r.server),r.slot,r.side,r.us,r.them].map(q).join(','));});});
  return '﻿'+L.join('\n');
 }
 function importData(d){
  if(!d||d.app!=='volley-rec'||!Array.isArray(d.matches))throw new Error('このアプリのファイルではありません');
- let add=0,rep=0,skip=0;
+ let add=0,rep=0,skip=0,tAdd=0;
+ const tin=Array.isArray(d.teams)?d.teams:(Array.isArray(d.players)||d.team?[{id:null,name:d.team||'読み込んだチーム',players:d.players||[]}]:[]);
+ const map={};
+ tin.forEach(t=>{if(!t)return;let loc=DB.teams.find(x=>t.id&&x.id===t.id)||DB.teams.find(x=>x.name===t.name);
+  if(!loc){if(DB.teams.length===1&&!DB.teams[0].players.length&&!DB.matches.length){loc=DB.teams[0];loc.name=t.name||loc.name;if(t.id)loc.id=t.id;}else{loc={id:t.id||uid(),name:t.name||'チーム',players:[]};DB.teams.push(loc);tAdd++;}}
+  (t.players||[]).forEach(p=>{if(p&&p.name&&!loc.players.some(x=>x.name===p.name))loc.players.push({id:p.id||uid(),num:p.num??'',name:p.name,pos:p.pos||''});});
+  map[t.id||'_']=loc.id;});
  d.matches.forEach(m=>{if(!m||!m.id||!Array.isArray(m.events)||!Array.isArray(m.sets)||!Array.isArray(m.members)){skip++;return;}
+  m.teamId=map[m.teamId]||(m.teamId&&DB.teams.some(t=>t.id===m.teamId)?m.teamId:(map['_']||Object.values(map)[0]||DB.teams[0].id));
   const i=DB.matches.findIndex(x=>x.id===m.id);if(i<0){DB.matches.push(m);add++;}else if((m.updated||0)>(DB.matches[i].updated||0)){DB.matches[i]=m;rep++;}else skip++;});
- if(Array.isArray(d.players)){d.players.forEach(p=>{if(p&&p.name&&!DB.players.some(x=>x.name===p.name))DB.players.push({id:p.id||uid(),num:p.num??'',name:p.name,pos:p.pos||''});});}
- if(d.team&&!DB.team)DB.team=d.team;
- save();return {add,rep,skip};
+ fixUI();save();return {add,rep,skip,tAdd};
 }
 let wakeLock=null;
 async function setWake(on){UI.wake=on;try{if(on&&'wakeLock' in navigator){wakeLock=await navigator.wakeLock.request('screen');}else if(wakeLock){await wakeLock.release();wakeLock=null;}}catch(e){if(on){UI.wake=false;toast('この端末では使えません');}}render();}
@@ -614,10 +668,10 @@ document.addEventListener('visibilitychange',()=>{if(UI.wake&&document.visibilit
 const ACT={
  nav:e=>{UI.tab=e.dataset.v;UI.sheet=null;window.scrollTo(0,0);render();},
  goHome:()=>{UI.tab='home';render();},
- newMatch:()=>openSheet({type:'newMatch',rule:(DB.matches[DB.matches.length-1]||{}).rule||'nine',kind:'official'}),
+ newMatch:()=>{const last=DB.matches.slice().sort((a,b)=>b.created-a.created)[0]||{};const team=UI.hf.team!=='all'?UI.hf.team:(last.teamId||UI.tid);const rule=UI.hf.rule!=='all'?UI.hf.rule:(DB.matches.filter(m=>m.teamId===team).sort((a,b)=>b.created-a.created)[0]||last).rule||'nine';openSheet({type:'newMatch',team,rule,kind:UI.hf.kind!=='all'?UI.hf.kind:'official'});},
  nmRule:e=>{UI.sheet.rule=e.dataset.v;renderSheet();},
  nmKind:e=>{UI.sheet.kind=e.dataset.v;renderSheet();},
- createMatch:()=>{const m=newMatchObj(UI.sheet.rule,UI.sheet.kind);DB.matches.push(m);save();UI.mid=m.id;UI.tab='match';UI.mtab='setup';UI.open=0;UI.sheet=null;render();},
+ createMatch:()=>{const m=newMatchObj(UI.sheet.rule,UI.sheet.kind,UI.sheet.team);DB.matches.push(m);save();UI.mid=m.id;UI.tab='match';UI.mtab='setup';UI.open=0;UI.sheet=null;render();},
  openMatch:e=>{UI.mid=e.dataset.id;UI.tab='match';const m=curM();UI.mtab=m&&m.events.length&&replay(m).over?'ana':(m&&m.events.length?'rec':'setup');UI.aset='all';UI.open=0;window.scrollTo(0,0);render();},
  mtab:e=>{UI.mtab=e.dataset.v;window.scrollTo(0,0);render();},
  aset:e=>{UI.aset=e.dataset.v;render();},
@@ -654,28 +708,34 @@ const ACT={
  shareOrder:()=>{const m=curM();const L=[`【オーダー ${fmtD(m.date)} ${m.title||''}】`];m.sets.forEach((s,i)=>{L.push(`■第${i+1}セット${setOpp(m,i)?' vs '+setOpp(m,i):''}(${s.first==='自'?'自チーム':'相手'}サーブから)`);L.push('サーブ順: '+s.order.map((id,k)=>`${k+1}.${nm(m,id)||'-'}`).join(' '));if(isNine(m))L.push('配置: '+POS9.map((p,k)=>`${p}=${nm(m,s.pos[k])||'-'}`).join(' / '));});shareText(L.join('\n'));},
  shareAgg:()=>{const A=aggRows();const f=UI.agg;shareText(summaryText(`【集計 ${(f.from||f.to)?(fmtD(f.from)||'最初')+'〜'+(fmtD(f.to)||'今日'):'全期間'}${f.opp?' vs '+f.opp:''}】${A.mc}試合`,A.rows,[],f.rule!=='six'));},
  print:()=>{try{window.print();}catch(e){toast('印刷できませんでした');}},
- af:e=>{UI.agg[e.dataset.k]=e.dataset.v;render();},
- period:e=>{const d=new Date(),f=UI.agg,v=e.dataset.v,ym=(y,m)=>`${y}-${String(m).padStart(2,'0')}-01`;if(v==='all'){f.from='';f.to='';}else if(v==='m1'){f.from=ym(d.getFullYear(),d.getMonth()+1);f.to='';}else if(v==='m3'){const x=new Date(d.getFullYear(),d.getMonth()-2,1);f.from=ym(x.getFullYear(),x.getMonth()+1);f.to='';}else{f.from=`${d.getFullYear()}-01-01`;f.to='';}render();},
- addPlayer:()=>{const mx=DB.players.reduce((a,p)=>Math.max(a,+p.num||0),0);DB.players.push({id:uid(),num:mx+1,name:'選手'+(DB.players.length+1),pos:''});save();render();},
- delPlayer:e=>{const p=DB.players.find(x=>x.id===e.dataset.id);if(!confirm(`${p.name} を削除しますか?(過去の試合の記録は残ります)`))return;DB.players=DB.players.filter(x=>x!==p);save();render();},
+ flt:e=>{UI[e.dataset.f][e.dataset.k]=e.dataset.v;saveUI();render();},
+ fper:e=>{const f=UI[e.dataset.f],v=e.dataset.v;f.period=v;if(v!=='custom'){const r=periodRange(v);f.from=r[0];f.to=r[1];}saveUI();render();},
+ toAgg:()=>{Object.assign(UI.agg,{team:UI.hf.team,rule:UI.hf.rule==='all'?'nine':UI.hf.rule,kind:UI.hf.kind,period:UI.hf.period,from:UI.hf.from,to:UI.hf.to,opp:''});if(UI.agg.team==='all'&&DB.teams.length>1)UI.agg.team=DB.teams[0].id;saveUI();UI.tab='agg';window.scrollTo(0,0);render();},
+ addTeam:()=>{const t=newTeam();DB.teams.push(t);UI.tid=t.id;save();saveUI();render();toast('チームを追加しました。名前を入れてください');},
+ selTeam:e=>{UI.tid=e.dataset.v;saveUI();render();},
+ delTeam:()=>{const t=teamOf(UI.tid);const n=DB.matches.filter(m=>m.teamId===t.id).length;if(n){alert(`このチームの試合が${n}件あるので削除できません。先に試合を削除するか、そのまま残してください。`);return;}if(!confirm(`「${t.name}」を削除しますか?`))return;DB.teams=DB.teams.filter(x=>x!==t);fixUI();save();saveUI();render();},
+ addPlayer:()=>{const t=teamOf(UI.tid);const mx=t.players.reduce((a,p)=>Math.max(a,+p.num||0),0);t.players.push({id:uid(),num:mx+1,name:'選手'+(t.players.length+1),pos:''});save();render();},
+ delPlayer:e=>{const t=teamOf(UI.tid);const p=t.players.find(x=>x.id===e.dataset.id);if(!p||!confirm(`${p.name} を削除しますか?(過去の試合の記録は残ります)`))return;t.players=t.players.filter(x=>x!==p);save();render();},
  pickFile:()=>$('#fileIn').click(),
- backup:()=>shareFile(`バレー記録_バックアップ_${today().replace(/-/g,'')}.json`,JSON.stringify({app:'volley-rec',v:1,type:'backup',exported:Date.now(),team:DB.team,players:DB.players,matches:DB.matches}),'application/json'),
+ backup:()=>shareFile(`バレー記録_バックアップ_${today().replace(/-/g,'')}.json`,JSON.stringify({app:'volley-rec',v:2,type:'backup',exported:Date.now(),teams:DB.teams,matches:DB.matches}),'application/json'),
  csvAll:()=>shareFile(`バレー記録_全記録_${today().replace(/-/g,'')}.csv`,csvOf(DB.matches),'text/csv'),
- wipe:()=>{if(!confirm('すべての試合とメンバーを削除します。よろしいですか?'))return;if(!confirm('本当に削除しますか?元に戻せません。'))return;DB=blankDB();save();render();},
+ wipe:()=>{if(!confirm('すべての試合とメンバーを削除します。よろしいですか?'))return;if(!confirm('本当に削除しますか?元に戻せません。'))return;DB=migrate(blankDB());fixUI();save();render();},
 };
 const CH={
  mf:e=>{const m=curM();m[e.dataset.k]=e.value.trim?e.value.trim():e.value;touch(m);render();},
  sf:e=>{const m=curM(),s=m.sets[+e.dataset.i];s[e.dataset.k]=e.dataset.k==='target'?Math.max(1,parseInt(e.value)||21):e.value.trim();touch(m);render();},
  sord:e=>{const m=curM();m.sets[+e.dataset.i].order[+e.dataset.k]=e.value;touch(m);render();},
  spos:e=>{const m=curM();m.sets[+e.dataset.i].pos[+e.dataset.k]=e.value;touch(m);render();},
- memToggle:e=>{const m=curM(),id=e.dataset.id;if(e.checked){const p=DB.players.find(x=>x.id===id);if(p&&!m.members.some(x=>x.id===id))m.members.push({id:p.id,num:p.num,name:p.name,pos:p.pos||''});}else{const used=m.events.some(v=>v.p===id||v.in===id)||m.sets.some(s=>s.order.includes(id)||(s.pos||[]).includes(id));if(used){toast('記録やサーブ順で使われているので外せません');e.checked=true;return;}m.members=m.members.filter(x=>x.id!==id);}touch(m);render();},
- af:e=>{UI.agg[e.dataset.k]=e.value;render();},
- team:e=>{DB.team=e.value;save();},
- pf:e=>{const p=DB.players.find(x=>x.id===e.dataset.id);if(!p)return;const k=e.dataset.k;let v=e.value.trim();if(k==='name'){if(!v){render();return;}if(DB.players.some(x=>x!==p&&x.name===v)){toast('同じ名前がいます');render();return;}}if(k==='num')v=v===''?'':(isNaN(+v)?v:+v);p[k]=v;save();},
+ memToggle:e=>{const m=curM(),id=e.dataset.id;if(e.checked){const p=teamOf(m.teamId).players.find(x=>x.id===id);if(p&&!m.members.some(x=>x.id===id))m.members.push({id:p.id,num:p.num,name:p.name,pos:p.pos||''});}else{const used=m.events.some(v=>v.p===id||v.in===id)||m.sets.some(s=>s.order.includes(id)||(s.pos||[]).includes(id));if(used){toast('記録やサーブ順で使われているので外せません');e.checked=true;return;}m.members=m.members.filter(x=>x.id!==id);}touch(m);render();},
+ af:e=>{UI.agg[e.dataset.k]=e.value;saveUI();render();},
+ fdate:e=>{UI[e.dataset.f][e.dataset.k]=e.value;saveUI();render();},
+ nmTeam:e=>{UI.sheet.team=e.value;const lm=DB.matches.filter(m=>m.teamId===e.value).sort((a,b)=>b.created-a.created)[0];if(lm)UI.sheet.rule=lm.rule;renderSheet();},
+ team:e=>{const t=teamOf(UI.tid);const v=e.value.trim();if(!v){render();return;}t.name=v;save();render();},
+ pf:e=>{const t=teamOf(UI.tid);const p=t.players.find(x=>x.id===e.dataset.id);if(!p)return;const k=e.dataset.k;let v=e.value.trim();if(k==='name'){if(!v){render();return;}if(t.players.some(x=>x!==p&&x.name===v)){toast('同じ名前がいます');render();return;}}if(k==='num')v=v===''?'':(isNaN(+v)?v:+v);p[k]=v;save();},
 };
 document.addEventListener('click',ev=>{const e=ev.target.closest('[data-act]');if(!e)return;if(e.dataset.act!=='bgClose'&&ev.target.closest('[data-stop]')&&!e.closest('[data-stop]'))return;const f=ACT[e.dataset.act];if(f){if(e.dataset.act==='bgClose'&&ev.target!==e)return;f(e,ev);}});
 document.addEventListener('change',ev=>{const e=ev.target.closest('[data-ch]');if(!e)return;const f=CH[e.dataset.ch];if(f)f(e,ev);});
-$('#fileIn').addEventListener('change',async ev=>{const f=ev.target.files[0];ev.target.value='';if(!f)return;try{const r=importData(JSON.parse(await f.text()));toast(`読み込みました: 追加${r.add}・更新${r.rep}${r.skip?'・変更なし'+r.skip:''}`);render();}catch(e){toast('読み込めませんでした: '+e.message);}});
+$('#fileIn').addEventListener('change',async ev=>{const f=ev.target.files[0];ev.target.value='';if(!f)return;try{const r=importData(JSON.parse(await f.text()));toast(`読み込みました: 追加${r.add}・更新${r.rep}${r.skip?'・変更なし'+r.skip:''}${r.tAdd?'・チーム追加'+r.tAdd:''}`);render();}catch(e){toast('読み込めませんでした: '+e.message);}});
 if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 render();
 </script>
