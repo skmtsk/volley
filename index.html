@@ -175,6 +175,10 @@ details.tour>summary{min-height:56px}
 .gbtn small{font-size:10px;font-weight:600;margin-top:4px;opacity:.85}
 .gbtn.gA{background:var(--gainBg);color:var(--gain)}.gbtn.gB{background:var(--warnBg);color:var(--warn)}.gbtn.gC{background:var(--lossBg);color:var(--loss)}
 .gbtn.on{border-color:currentColor}
+.netbar{font-size:11px;font-weight:700;color:var(--sub);border-bottom:3px solid var(--ink);padding:0 0 2px;margin:8px 0 6px;text-align:center}
+.pgrid9{display:grid;grid-template-columns:repeat(10,1fr);gap:6px 4px}
+.pgrid9 .chip{min-height:54px;font-size:14px;padding:2px 1px}
+.pgrid9 .chip small{font-size:10px}
 .mcheck{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
 body.capture #app{width:960px;max-width:none;padding:24px}
 body.capture .print-only{display:block}
@@ -208,7 +212,7 @@ nav#nav svg{width:24px;height:24px}
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 <script>
 'use strict';
-const APPV='1.8.0';
+const APPV='1.8.1';
 const STORE='volleyRec.v1';
 const POS9=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト'];
 // key, label, 得失, 分類, 選手入力(req=必須/opt=任意/auto=サーバー自動/none=不要/sub), 表示(any/self=自サーブ中/opp=相手サーブ中), 限定(nine/practice)
@@ -557,6 +561,17 @@ function courtSVG(pts,o){
 }
 function courtBox(inner,tap,o){o=o||{};const M=o.out?16:0;return `<div class="cwrap"><div class="clbl">${o.opp?'相手コート(奥=エンドライン)':'ネット'}</div><div class="cpick"${tap?` data-act="${tap===true?'landTap':tap}" data-m="${M}"`:''}>${inner}</div><div class="clbl">${o.opp?'ネット(手前)':'エンドライン'}</div></div>`;}
 function tapXY(e,ev,clamp){const r=e.getBoundingClientRect(),M=+(e.dataset.m||0);const f=v=>Math.round(((v)*(100+2*M)-M))/100;let x=f((ev.clientX-r.left)/r.width),y=f((ev.clientY-r.top)/r.height);if(clamp){x=Math.min(1,Math.max(0,x));y=Math.min(1,Math.max(0,y));}return {x,y};}
+const POS_SHORT=['レフト','中打ちL','セッター','中打ちR','ライト','ハーフ','バックL','バックC','バックR'];
+const LAY={order:[[1,1],[1,3],[1,5],[1,7],[1,9],[2,5],[3,3],[3,5],[3,7]],rcv:[[2,1],[2,3],[1,6],[2,7],[1,9],[2,5],[3,2],[3,4],[3,6]]};
+function posGrid(m,c,on,f,lay){
+ const pos=c&&c.pos||[];
+ if(!isNine(m)||!pos.some(id=>id&&on.includes(id)))return `<div class="chips">${on.map(f).join('')}</div>`;
+ const L=LAY[lay]||LAY.order;let g='<div class="netbar">ネット</div><div class="pgrid9">';
+ pos.forEach((id,i)=>{if(!id||!on.includes(id))return;const [r,col]=L[i];g+=f(id).replace('<button ',`<button style="grid-row:${r};grid-column:${col}/span 2" `).replace(/<small>[^<]*<\/small>/,`<small>${POS_SHORT[i]}</small>`);});
+ g+='</div>';const rest=on.filter(id=>!pos.includes(id));
+ if(rest.length)g+=`<p class="sub" style="margin:6px 0 2px">ポジション未設定</p><div class="chips">${rest.map(f).join('')}</div>`;
+ return g;
+}
 function legendIcon(st){return st.sh==='c'?`<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" style="fill:${st.c}"/></svg>`:st.sh==='s'?`<svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" style="fill:${st.c}"/></svg>`:st.sh==='x'?`<svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2L12 12M12 2L2 12" style="stroke:${st.c};stroke-width:2.4"/></svg>`:`<svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1L13 12H1Z" style="fill:${st.c}"/></svg>`;}
 const SPK_STYLE={kill:{c:'var(--gain)',sh:'c',lab:'決定'},miss:{c:'var(--loss)',sh:'x',lab:'ミス'},blk:{c:'var(--warn)',sh:'s',lab:'被ブロック'}};
 const spkRes=k=>k==='spike_miss'?'miss':k==='blocked'?'blk':'kill';
@@ -949,16 +964,16 @@ function renderSheet(){
    if(p.need==='none'){h+=`<div class="row" style="margin-top:12px"><button class="btn pri" data-act="pickP" data-id="">選ばずに記録</button><button class="btn" data-act="closeSheet">やめる</button></div>`;}
    else{
    if(ck){const act='pickSel';const cp=(id)=>{const pi=c.pos.indexOf(id);const sn=c.order.indexOf(id)+1;return `<button class="chip ${s.p===id?'srv':''}" data-act="${act}" data-id="${id}">${esc(nm(m,id))}<small>${s.p===id?'✓ 選択中':(sn?sn+'番':'')+(nine&&pi>=0?' '+POS9[pi]:'')}</small></button>`;};
-    h+=`<p class="sub" style="margin-top:${ops.length?10:0}px">① ${p.res==='得'?'決めた選手':'関わった選手'}をタップ${p.need==='opt'?'(任意)':''} → ② ${ck==='own'?'自コートの落ちた場所':'相手コートの打ったコース'}をタップで記録</p><div class="chips">${on.map(cp).join('')}</div>`;
+    h+=`<p class="sub" style="margin-top:${ops.length?10:0}px">① ${p.res==='得'?'決めた選手':'関わった選手'}をタップ${p.need==='opt'?'(任意)':''} → ② ${ck==='own'?'自コートの落ちた場所':'相手コートの打ったコース'}をタップで記録</p>${posGrid(m,c,on,cp,['o_ace','r_serve'].includes(s.k)?'rcv':'order')}`;
     if(bench.length)h+=`<details style="margin-top:6px"><summary>控えの選手</summary><div class="chips">${bench.map(p=>cp(p.id)).join('')}</div></details>`;
     const ex=s.mode==='edit'?null:null;const out=OUT_OK.includes(s.k);
     h+=`<div style="margin-top:8px">${courtBox(courtSVG([],{opp:ck==='opp',out,six:!nine}),'pickTap',{opp:ck==='opp',out})}</div>`;
     h+=`<div class="row" style="margin-top:10px"><button class="btn" data-act="pickNoLand">場所なしで記録</button><button class="btn" data-act="closeSheet">やめる</button></div>`;}
    else{
-   h+=`<p class="sub" style="margin-top:${ops.length?10:0}px">${p.res==='得'?'決めた選手':'ミス・関わった選手'}をタップ</p><div class="chips">${on.map(id=>chip(id,'pickP')).join('')}</div>`;
+   h+=`<p class="sub" style="margin-top:${ops.length?10:0}px">${p.res==='得'?'決めた選手':'ミス・関わった選手'}をタップ</p>${posGrid(m,c,on,id=>chip(id,'pickP'),['o_ace','r_serve'].includes(s.k)?'rcv':'order')}`;
    if(bench.length)h+=`<details style="margin-top:10px"><summary>控えの選手</summary><div class="chips">${bench.map(p=>`<button class="chip" data-act="pickP" data-id="${p.id}">${esc(p.name)}<small>控え</small></button>`).join('')}</div></details>`;
    h+=`<div class="row" style="margin-top:12px">${p.need==='opt'?'<button class="btn" data-act="pickP" data-id="">選手なし・不明</button>':''}${p.need==='auto'?'<button class="btn" data-act="pickP" data-id="">そのときのサーバー(自動)</button>':''}<button class="btn" data-act="closeSheet">やめる</button></div>`;}}}
-  else if(s.type==='subOut'){h+=`<h2>${pre}メンバー交代</h2><p class="sub">コートから<b>出る</b>選手</p><div class="chips">${on.map(id=>chip(id,'subOut')).join('')}</div><button class="btn block" style="margin-top:12px" data-act="closeSheet">やめる</button>`;}
+  else if(s.type==='subOut'){h+=`<h2>${pre}メンバー交代</h2><p class="sub">コートから<b>出る</b>選手</p>${posGrid(m,c,on,id=>chip(id,'subOut'),'order')}<button class="btn block" style="margin-top:12px" data-act="closeSheet">やめる</button>`;}
   else{h+=`<h2>${pre}メンバー交代</h2><p class="sub">${esc(nm(m,s.out))} と<b>入れ替わる</b>選手(サーブ順${nine?'・ポジション':''}を引き継ぎます)</p><div class="chips">${bench.map(p=>`<button class="chip" data-act="subIn" data-id="${p.id}">${esc(p.name)}<small>${p.num!==''&&p.num!=null?'#'+esc(p.num):''}</small></button>`).join('')}</div>${bench.length?'':'<p class="sub">控えの選手がいません。「準備」でメンバーを追加してください。</p>'}<button class="btn block" style="margin-top:12px" data-act="closeSheet">やめる</button>`;}
  }else if(s.type==='playPick'){
   const nine=isNine(m);const show=p=>!p.only||(p.only==='nine'?nine:m.kind==='practice');
@@ -996,17 +1011,17 @@ function renderSheet(){
   const chip=(id,act,sel)=>{const pi=c.pos.indexOf(id);const sn=c.order.indexOf(id)+1;return `<button class="chip ${sel?'srv':''}" data-act="${act}" data-id="${id}">${esc(nm(m,id))}<small>${sel&&s.type==='multi'?'✓ 選択中':(sn?sn+'番':'')+(nine&&pi>=0?' '+POS9[pi]:'')}</small></button>`;};
   if(s.type==='foul'){const own=s.k==='foul';const ops=own?[]:oppPlayers(setOpp(m,c.si));
    h+=`<h2>${pre}${esc(plabel(s.k,nine))}</h2>`;
-   if(own)h+=`<p class="sub">反則した選手(任意・先にタップ)</p><div class="chips">${on.map(id=>chip(id,'fP',s.p===id)).join('')}</div>`;
+   if(own)h+=`<p class="sub">反則した選手(任意・先にタップ)</p>${posGrid(m,c,on,id=>chip(id,'fP',s.p===id),'order')}`;
    else if(ops.length)h+=`<p class="sub">反則した相手の選手(任意・先にタップ)</p><div class="chips">${ops.map(o=>`<button class="chip ${s.op===o.id?'srv':''}" data-act="fOp" data-id="${o.id}">#${esc(o.num===''||o.num==null?'?':o.num)}<small>${esc(o.pos||'')}</small></button>`).join('')}</div>`;
    h+=`<p class="sub" style="margin-top:10px">反則の種類をタップすると記録します</p><div class="pgrid">${FOULS.map(f=>`<button class="pbtn ${own?'l':'g'}${s.ft===f?' dimno':''}" data-act="fGo" data-v="${f}">${f}</button>`).join('')}<button class="pbtn n" data-act="fGo" data-v="">選択なし</button></div><button class="btn block" style="margin-top:12px" data-act="closeSheet">やめる</button>`;}
   else{const ps=s.ps||[];const bench=m.members.filter(p=>!on.includes(p.id));
-   h+=`<h2>${pre}お見合い</h2><p class="sub">お見合いした選手をすべてタップ(複数選べます)</p><div class="chips">${on.map(id=>chip(id,'mP',ps.includes(id))).join('')}</div>`;
+   h+=`<h2>${pre}お見合い</h2><p class="sub">お見合いした選手をすべてタップ(複数選べます)</p>${posGrid(m,c,on,id=>chip(id,'mP',ps.includes(id)),'order')}`;
    if(bench.length)h+=`<details style="margin-top:10px"><summary>控えの選手</summary><div class="chips">${bench.map(p=>chip(p.id,'mP',ps.includes(p.id))).join('')}</div></details>`;
    h+=`<div class="row" style="margin-top:12px"><button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="mGo">記録する(${ps.length}人)</button></div>`;}
  }else if(s.type==='rcv'){
   const R=replay(m),nine=isNine(m),c=s.mode?ctxFor(m,R,s):Object.assign({si:R.cur.si},R.cur);const on=(c.order||[]).filter(Boolean);
   h+=`<h2>${s.mode==='ins'?'追加: ':s.mode?'変更: ':''}サーブカット</h2><p class="sub">${s.mode?'':`相手サーブ・第${R.cur.set}セット ${R.cur.us}-${R.cur.them}<br>`}受けた選手をタップしてから、評価を選んでください</p>`;
-  h+=`<div class="chips">${on.map(id=>{const pi=(c.pos||[]).indexOf(id);return `<button class="chip ${s.p===id?'srv':''}" data-act="rcvP" data-id="${id}">${esc(nm(m,id))}<small>${nine&&pi>=0?POS9[pi]:''}</small></button>`;}).join('')}</div>`;
+  h+=posGrid(m,c,on,id=>`<button class="chip ${s.p===id?'srv':''}" data-act="rcvP" data-id="${id}">${esc(nm(m,id))}<small></small></button>`,'rcv');
   h+=`<div class="grades">${['A','B','C'].map(g=>`<button class="gbtn g${g} ${s.g===g?'on':''}" data-act="rcvG" data-v="${g}">${g}<small>${GRADE[g]}</small></button>`).join('')}</div>`;
   h+=`<details style="margin-top:6px"><summary class="sub">A・B・Cの基準</summary><p class="sub" style="margin:0">${['A','B','C'].map(g=>esc(GRADE_FULL[g])).join('<br>')}</p></details>`;
   if(!s.mode){h+=`<div class="pgrid" style="margin-top:10px"><button class="pbtn l" data-act="rcvX" data-k="o_ace">サービスエース<small>取られた・相手に＋1</small></button>${nine?'<button class="pbtn n" data-act="rcvX" data-k="serve1">相手 1本目ミス<small>点は動かない</small></button>':''}<button class="pbtn g" data-act="rcvX" data-k="o_serve">${nine?'相手 2本目ミス':'相手サーブミス'}<small>自チームに＋1</small></button></div>`;
