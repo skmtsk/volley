@@ -183,6 +183,12 @@ details.tour>summary{min-height:56px}
 .gbtn.gA{background:var(--gainBg);color:var(--gain)}.gbtn.gB{background:var(--warnBg);color:var(--warn)}.gbtn.gC{background:var(--lossBg);color:var(--loss)}
 .gbtn.gO{background:var(--neuBg);color:var(--ink);font-size:13px;white-space:nowrap;letter-spacing:-.5px}
 .gbtn.gO small{white-space:normal;letter-spacing:0}
+.rbar{display:flex;gap:2px;height:30px;border-radius:6px;overflow:hidden;margin:6px 0}
+.rbar span{display:flex;align-items:center;justify-content:center;color:var(--card);font-size:12px;font-weight:700;min-width:3px}
+.rleg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin-bottom:6px}
+.rleg span{display:inline-flex;align-items:center;gap:4px}
+.rleg i{display:inline-block;width:12px;height:12px;border-radius:3px}
+td small.rp{display:block;font-size:10px;color:var(--sub);font-weight:400}
 .gbtn.on{border-color:currentColor}
 .netbar{font-size:11px;font-weight:700;color:var(--sub);border-bottom:3px solid var(--ink);padding:0 0 2px;margin:8px 0 6px;text-align:center}
 .pgrid9{display:grid;grid-template-columns:repeat(10,1fr);gap:6px 4px}
@@ -202,6 +208,30 @@ nav#nav button{flex:1;padding:7px 0 5px;font-size:11px;color:var(--sub);display:
 nav#nav button.on{color:var(--pri2)}
 nav#nav svg{width:24px;height:24px}
 .print-only{display:none}
+.bwrap{margin:4px 0}
+.bsvg{display:block;width:min(100%,calc((100vh - 250px)*128/228));width:min(100%,calc((100dvh - 250px)*128/228));min-width:240px;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.bsvg .bout{fill:var(--neuBg)}.bsvg .bcourt{fill:var(--court);stroke:var(--ink);stroke-width:.8}
+.bsvg .bl2{stroke:var(--ink);stroke-width:.4;opacity:.6;fill:none}.bsvg .bnet{stroke:var(--ink);stroke-width:1.6}
+.bsvg .blab{font-size:4.2px;fill:var(--sub);text-anchor:middle;font-weight:700}
+.bsvg .bpen{fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.bsvg .bhit{fill:none;stroke:transparent;stroke-width:7;pointer-events:stroke}
+.bsvg.m-erase .bpen{stroke-dasharray:2 1.4}
+.btok{cursor:grab}.btok circle{stroke:var(--card);stroke-width:.8}
+.btok .bhalo{fill:transparent;stroke:none}
+.btok.own circle:not(.bhalo){fill:var(--pri2)}.btok.opp circle:not(.bhalo){fill:var(--loss)}
+.btok text{fill:#fff;font-weight:800;text-anchor:middle;pointer-events:none}
+.btok.ball circle:not(.bhalo){fill:#F4C430;stroke:var(--ink);stroke-width:.5}.btok .bseam{fill:none;stroke:var(--ink);stroke-width:.35}
+.btok.sel circle:not(.bhalo){stroke:var(--ink);stroke-width:1.4}.btok.sel .bhalo{fill:var(--ink);opacity:.15}
+.bsvg.m-pen .btok,.bsvg.m-erase .btok{pointer-events:none}
+.btitle{display:flex;justify-content:space-between;align-items:baseline;font-size:17px;margin:2px 0 6px}
+.bctl{margin:0 0 6px}.btn.pen i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:-1px}.btn.pen.on{outline:2px solid var(--pri2)}
+.bselp{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:6px 0}
+.bnote{margin-top:8px;white-space:normal}
+.chip.opp{color:var(--loss)}
+.bpats{margin-bottom:8px}
+body.capture .bsvg{width:520px}
+body.capture .printonly{display:block}
+.printonly{display:none}
 @media print{
  nav#nav,.noprint,#toast{display:none!important}
  body{padding:0;background:#fff;color:#000}
@@ -221,7 +251,7 @@ nav#nav svg{width:24px;height:24px}
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 <script>
 'use strict';
-const APPV='1.10.0';
+const APPV='1.12.0';
 const STORE='volleyRec.v1';
 const POS9=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト'];
 // key, label, 得失, 分類, 選手入力(req=必須/opt=任意/auto=サーバー自動/none=不要/sub), 表示(any/self=自サーブ中/opp=相手サーブ中), 限定(nine/practice)
@@ -308,6 +338,7 @@ function migrate(d){
  if(!Array.isArray(d.tours))d.tours=[];
  if(!d.oppInfo||typeof d.oppInfo!=='object'||Array.isArray(d.oppInfo))d.oppInfo={};
  d.matches.forEach(m=>{if(m.tourId&&!d.tours.some(t=>t.id===m.tourId))delete m.tourId;});
+ if(!Array.isArray(d.boards))d.boards=[];d.boards.forEach(b=>{if(!d.teams.some(t=>t.id===b.teamId))b.teamId=d.teams[0].id;if(!Array.isArray(b.pats))b.pats=[];});
  d.v=2;return d;
 }
 function load(){try{const s=localStorage.getItem(STORE);if(s){const d=JSON.parse(s);if(d&&Array.isArray(d.matches))return migrate(d);}}catch(e){}return migrate(blankDB());}
@@ -510,7 +541,7 @@ function aiText(title,rows,sums,o){
  const pl=Object.values(S.pl).sort((a,b)=>b.score-a.score);
  if(pl.length){T.push('【選手別】(得点/ミス計/サーブ本数とサーブ中得点率)');pl.forEach(x=>{const ms=MISS_K.filter(k=>x.k[k]).map(k=>`${plabel(k,nine)}${x.k[k]}`).join('・');T.push(`${x.name}: 得点${x.score}(${SCORE_K.filter(k=>x.k[k]).map(k=>`${plabel(k,nine)}${x.k[k]}`).join('・')||'なし'}) / ミス${x.miss}${ms?'('+ms+')':''} / サーブ${x.srvT}本 ${pct(x.srvW,x.srvT)}`);});}
  const sl=Object.entries(S.slot).sort((a,b)=>a[0]-b[0]);if(sl.length){T.push('【サーブ順別】');sl.forEach(([k,v])=>T.push(`${k}番: サイドアウト率${pct(v.so,v.soT)}(${v.so}/${v.soT}) ブレイク率${pct(v.br,v.brT)}(${v.br}/${v.brT})`));}
- if(S.hasRcv){const R_=S.rc,n=R_.A+R_.B+R_.C+R_.O+R_.X;T.push(`【サーブカット】${n}本 A${R_.A} B${R_.B} C${R_.C} ダイレクト返球${R_.O} 失点${R_.X} A返球率${pct(R_.A,n)} A+B率${pct(R_.A+R_.B,n)}`);T.push('(評価の基準) '+GR.map(g=>GRADE_FULL[g]).join(' / '));
+ if(S.hasRcv){const R_=S.rc,n=R_.A+R_.B+R_.C+R_.O+R_.X;T.push(`【サーブカット】${n}本 A${R_.A} B${R_.B} C${R_.C} ダイレクト返球${R_.O} 失点${R_.X} A返球率${pct(R_.A,n)} B返球率${pct(R_.B,n)} C返球率${pct(R_.C,n)} ダイレクト返球率${pct(R_.O,n)} 失点率${pct(R_.X,n)} A+B率${pct(R_.A+R_.B,n)}`);T.push('(評価の基準) '+GR.map(g=>GRADE_FULL[g]).join(' / '));
   GR.forEach(g=>{const x=S.rgSo[g];if(x.t)T.push(`${g==='O'?'ダイレクト返球':'カット'+g}のときのサイドアウト率 ${pct(x.w,x.t)}(${x.w}/${x.t})`);});
   Object.values(S.pl).filter(x=>x.rc.A+x.rc.B+x.rc.C+x.rc.O+x.rc.X).forEach(x=>{const n2=x.rc.A+x.rc.B+x.rc.C+x.rc.O+x.rc.X;T.push(`${x.name}: カット${n2}本 A${x.rc.A} B${x.rc.B} C${x.rc.C} ダイレクト返球${x.rc.O} 失点${x.rc.X}`);});}
  Object.entries(S.ft).forEach(([k,f])=>T.push(`【${k==='foul'?'自チームの反則':'相手の反則'}の内訳】`+Object.entries(f).map(([t,v])=>`${t}${v}`).join('、')));
@@ -539,13 +570,21 @@ function whoHTML(rows,k,side,nine){
  if(k==='foul'||k==='o_foul'){const f={};rr.forEach(r=>{const t=r.ft||'選択なし';f[t]=(f[t]||0)+1;});h+='<h3>反則の種類</h3><div class="tbl"><table><tr><th>種類</th><th>回数</th></tr>'+[...FOULS,'選択なし'].filter(t=>f[t]).map(t=>`<tr><td><b>${esc(t)}</b></td><td>${f[t]}</td></tr>`).join('')+'</table></div>';}
  return h;
 }
+const RCV_SEG=[['A','A','var(--gain)'],['B','B','var(--warn)'],['C','C','var(--loss)'],['O','ダイレクト','var(--neu)'],['X','失点','repeating-linear-gradient(135deg,var(--loss) 0 4px,var(--lossBg) 4px 7px)']];
+function rcvBar(T,n){if(!n)return '';
+ let b='<div class="rbar" role="img" aria-label="返球の内訳 '+RCV_SEG.map(([k,l])=>`${l} ${pct(T[k],n)}`).join('、')+'">';
+ RCV_SEG.forEach(([k,l,c])=>{const v=T[k];if(!v)return;const w=v/n*100;b+=`<span style="flex:${v} 1 0;background:${c}" title="${l} ${v}本 ${pct(v,n)}">${w>=12&&k!=='X'?Math.round(w)+'%':''}</span>`;});
+ b+='</div><div class="rleg">'+RCV_SEG.map(([k,l,c])=>`<span><i style="background:${c}"></i><b>${l}</b> ${pct(T[k],n)} <span class="sub">${T[k]}本</span></span>`).join('')+'</div>';
+ return '<h3>返球率(A・B・C)</h3>'+b;}
 function rcvHTML(S){
  const T=S.rc,n=T.A+T.B+T.C+T.O+T.X;
  let h='<h2>サーブカット</h2><div class="kpis">'+kpi('カットした本数',n)+kpi('A返球率',pct(T.A,n),`A ${T.A}本`)+kpi('A+B率',pct(T.A+T.B,n),'速攻・サイドが使えた割合')+kpiW('カットで失点',T.X,'_rcvx')+'</div>';
+ h+=rcvBar(T,n);
  const list=Object.values(S.pl).map(x=>Object.assign(x,{rn:x.rc.A+x.rc.B+x.rc.C+x.rc.O+x.rc.X})).filter(x=>x.rn>0).sort((a,b)=>b.rn-a.rn);
- if(list.length){h+='<div class="tbl" style="margin-top:8px"><table><tr><th>選手</th><th>本数</th><th>A</th><th>B</th><th>C</th><th>ダイレクト</th><th>失点</th><th>A率</th><th>A+B率</th></tr>';
-  list.forEach(x=>{h+=`<tr><td><b>${esc(x.name)}</b></td><td>${x.rn}</td><td>${x.rc.A}</td><td>${x.rc.B}</td><td>${x.rc.C}</td><td>${x.rc.O}</td><td class="${x.rc.X?'l':''}">${x.rc.X}</td><td><b>${pct(x.rc.A,x.rn)}</b></td><td>${pct(x.rc.A+x.rc.B,x.rn)}</td></tr>`;});
-  h+=`<tr class="tot"><td>合計</td><td>${n}</td><td>${T.A}</td><td>${T.B}</td><td>${T.C}</td><td>${T.O}</td><td>${T.X}</td><td>${pct(T.A,n)}</td><td>${pct(T.A+T.B,n)}</td></tr></table></div>`;}
+ if(list.length){h+='<div class="tbl" style="margin-top:8px"><table><tr><th>選手</th><th>本数</th><th>A</th><th>B</th><th>C</th><th style="white-space:nowrap">ダイレクト</th><th>失点</th><th style="white-space:nowrap">A+B率</th></tr>';
+  const cell=(v,t,cl)=>`<td class="${cl||''}">${v}<small class="rp">${pct(v,t)}</small></td>`;
+  list.forEach(x=>{h+=`<tr><td><b>${esc(x.name)}</b></td><td>${x.rn}</td>${cell(x.rc.A,x.rn)}${cell(x.rc.B,x.rn)}${cell(x.rc.C,x.rn)}${cell(x.rc.O,x.rn)}${cell(x.rc.X,x.rn,x.rc.X?'l':'')}<td><b>${pct(x.rc.A+x.rc.B,x.rn)}</b></td></tr>`;});
+  h+=`<tr class="tot"><td>合計</td><td>${n}</td>${cell(T.A,n)}${cell(T.B,n)}${cell(T.C,n)}${cell(T.O,n)}${cell(T.X,n)}<td>${pct(T.A+T.B,n)}</td></tr></table></div><p class="sub" style="margin:4px 0 0">各欄の下の%は、その選手がカットした本数に対する割合です。</p>`;}
  h+='<h3>カットの評価ごとのサイドアウト率</h3><div class="tbl"><table><tr><th>カット</th><th>サイドアウト率</th><th>取った/ラリー</th></tr>'+GR.map(g=>{const x=S.rgSo[g];return `<tr><td><b>${GLAB[g]}</b> <span class="sub">${GRADE[g]}</span></td><td><b>${pct(x.w,x.t)}</b></td><td>${x.w}/${x.t}</td></tr>`;}).join('')+'</table></div>';
  return h+'<p class="sub">'+GR.map(g=>esc(GRADE_FULL[g])).join('<br>')+'<br>失点=相手サービスエースとサーブレシーブミス。</p>';
 }
@@ -951,10 +990,10 @@ function vData(){
  h+='<h2>このアプリについて</h2><div class="card"><p class="sub">バレー記録 v'+APPV+'。9人制(公式戦・練習試合)と6人制小学生ルールに対応。ホーム画面に追加して使うと、電波がなくても動きます。Safariで開いたときとホーム画面から開いたときでは、保存場所が別になります。</p><button class="btn danger sm" data-act="wipe">全データを削除</button></div>';
  return h;
 }
-const NAV=[['home','試合','<path d="M4 5h16v14H4z M4 9h16 M9 5v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'],['agg','集計','<path d="M5 19V11 M10 19V6 M15 19v-5 M20 19V9 M3 19h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'],['team','メンバー','<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c.8-3.3 3.2-5 6-5s5.2 1.7 6 5 M16 5.5a3 3 0 0 1 0 5.6 M18 14c1.6.6 2.6 2.2 3 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'],['data','データ','<path d="M12 4v11 M7 10l5 5 5-5 M4 19h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>']];
+const NAV=[['home','試合','<path d="M4 5h16v14H4z M4 9h16 M9 5v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'],['agg','集計','<path d="M5 19V11 M10 19V6 M15 19v-5 M20 19V9 M3 19h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'],['team','メンバー','<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c.8-3.3 3.2-5 6-5s5.2 1.7 6 5 M16 5.5a3 3 0 0 1 0 5.6 M18 14c1.6.6 2.6 2.2 3 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'],['board','ボード','<rect x="3" y="4" width="18" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 21l4-4 4 4 M7 13l3-3 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'],['data','データ','<path d="M12 4v11 M7 10l5 5 5-5 M4 19h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>']];
 function render(){
  const t=UI.tab;let h;
- if(t==='match')h=vMatch();else if(t==='agg')h=vAgg();else if(t==='team')h=vTeam();else if(t==='data')h=vData();else h=vHome();
+ if(t==='match')h=vMatch();else if(t==='agg')h=vAgg();else if(t==='team')h=vTeam();else if(t==='data')h=vData();else if(t==='board')h=vBoard();else h=vHome();
  if(UI.shared)h=`<div class="banner n noprint" style="margin-top:0">📨 共有された${DB.matches.length}試合を表示しています(見るだけ・保存はされません)<div class="row" style="margin-top:8px"><button class="btn sm pri" data-act="shImport">自分のアプリに取り込む</button><button class="btn sm" data-act="shClose">閉じる</button></div></div>`+h;
  $('#app').innerHTML=h;
  const mh=document.querySelector('.mhead.pin');document.body.classList.toggle('pinned',!!mh);document.documentElement.style.setProperty('--hh',(mh?mh.offsetHeight:0)+'px');
@@ -968,6 +1007,7 @@ function render(){
 function renderSheet(){
  const s=UI.sheet,el=$('#sheet');if(!s){el.innerHTML='';return;}
  const m=curM();let h='';
+ if(['bpNew','bpEdit','patNew','patEdit'].includes(s.type))h=boardSheet(s);else
  if(s.type==='pick'||s.type==='subOut'||s.type==='subIn'){
   const R=replay(m),nine=isNine(m),c=ctxFor(m,R,s);const ops=OPP_K.includes(s.k)?oppPlayers(setOpp(m,c.si)):[];
   const on=c.order.filter(Boolean);const bench=m.members.filter(p=>!on.includes(p.id));
@@ -1062,7 +1102,11 @@ function renderSheet(){
   h+=`<h2>AIで総括する</h2><p class="sub">試合データをまとめた依頼文を作りました。「コピーしてClaudeを開く」を押し、開いた画面に<b>貼り付けて送信</b>すると、総括・強み・弱み・相手の傾向・次の試合への戦術提言を、アナリストの目線でまとめてくれます。ChatGPTやGeminiなど、ほかのAIアプリに貼り付けても使えます。</p><textarea class="ai" readonly>${esc(s.text)}</textarea><p class="sub">選手の名前が入っています。気になる場合は、貼り付けたあとで名前を消してから送信してください。</p><div class="pgrid" style="margin-top:8px"><button class="btn pri" data-act="aiClaude">コピーしてClaudeを開く</button><button class="btn" data-act="aiShare">ほかのAIアプリへ送る</button><button class="btn" data-act="aiCopy">コピーだけ</button><button class="btn" data-act="closeSheet">閉じる</button></div>`;
  }else if(s.type==='link'){
   const long=s.url.length>9000;
-  h+=`<h2>共有リンクができました</h2><div class="evhead">${esc(s.title||'')}・${s.count}試合<br><span class="sub">リンクの長さ ${s.url.length.toLocaleString()}文字</span></div>${long?'<div class="banner w">リンクが長いため、LINEでは送れないことがあります。その場合は期間などで試合を絞るか、「試合データを送る」(ファイル)を使ってください。</div>':''}<p class="sub">受け取った人はリンクを開くだけで、同じ分析画面を見られます(見るだけ。データはリンクの中に入っていて、ネット上には保存されません)。リンクを知っている人は誰でも見られるので、送る相手に気をつけてください。</p><div class="row" style="margin-top:8px"><button class="btn" data-act="closeSheet">閉じる</button><button class="btn" data-act="linkCopy">コピー</button><button class="btn pri" data-act="linkSend">送る</button></div>`;
+  const sh=s.short;
+  h+=`<h2>共有リンクができました</h2><div class="evhead">${esc(s.title||'')}・${s.count}試合<br><span class="sub">リンクの長さ ${(sh||s.url).length.toLocaleString()}文字${sh?`(短縮前 ${s.url.length.toLocaleString()}文字)`:''}</span></div>`;
+  h+=sh?`<div class="banner g" style="word-break:break-all">短縮URL: <b>${esc(sh)}</b></div>`
+   :`<div class="card" style="margin:8px 0;padding:10px"><button class="btn block" data-act="linkShort" ${s.busy?'disabled':''}>${s.busy?'短縮しています…':'短縮URLにする(is.gd)'}</button><p class="sub" style="margin:6px 0 0">${s.url.length>SHORT_MAX?`<b>リンクが長すぎて短縮できません(${SHORT_MAX.toLocaleString()}文字まで)。</b>試合を絞って作り直してください。<br>`:''}無料の短縮サービス <b>is.gd</b> を使います。短縮すると、リンクの中身(選手名を含む試合データ)が is.gd にも保存され、あとから消せません。</p></div>`;
+  h+=`${!sh&&s.url.length>2000?'<div class="banner w">リンクが長いため、LINEでは送れないことがあります。その場合は「短縮URLにする」か、期間などで試合を絞ってください。</div>':''}<p class="sub">受け取った人はリンクを開くだけで、同じ分析画面を見られます(見るだけ)。リンクを知っている人は誰でも見られるので、送る相手に気をつけてください。</p><div class="row" style="margin-top:8px"><button class="btn" data-act="closeSheet">閉じる</button><button class="btn" data-act="linkCopy">コピー</button><button class="btn pri" data-act="linkSend">送る</button></div>`;
  }else if(s.type==='ev'){
   const R=replay(m);const r=R.rows.find(x=>x.i===s.i);if(!r){UI.sheet=null;el.innerHTML='';return;}
   const nine=isNine(m),p=P[r.k];const who=evWho(m,r);
@@ -1150,6 +1194,7 @@ function importData(d){
  const tmap={};
  (Array.isArray(d.tours)?d.tours:[]).forEach(t=>{if(!t||!t.id)return;const team=map[t.teamId]||t.teamId;let loc=DB.tours.find(x=>x.id===t.id)||DB.tours.find(x=>x.name===t.name&&x.teamId===team&&x.date===t.date);if(!loc){loc={id:t.id,name:t.name||'大会',date:t.date||'',teamId:team};DB.tours.push(loc);}tmap[t.id]=loc.id;});
  if(d.oppInfo&&typeof d.oppInfo==='object')Object.entries(d.oppInfo).forEach(([name,inf])=>{if(!inf)return;const loc=ensureOI(name);if(!loc.memo&&inf.memo)loc.memo=inf.memo;(inf.players||[]).forEach(p=>{if(p&&!loc.players.some(x=>x.id===p.id||(String(x.num)===String(p.num)&&p.num!=='')))loc.players.push({id:p.id||uid(),num:p.num??'',pos:p.pos||'',memo:p.memo||''});});});
+ (Array.isArray(d.boards)?d.boards:[]).forEach(b=>{if(!b||!b.id||!Array.isArray(b.pats))return;const nb=JSON.parse(JSON.stringify(b));nb.teamId=map[b.teamId]||(DB.teams.some(t=>t.id===b.teamId)?b.teamId:DB.teams[0].id);const i=boards().findIndex(x=>x.id===b.id);if(i<0)boards().push(nb);else if((nb.updated||0)>=(DB.boards[i].updated||0))DB.boards[i]=nb;});
  d.matches.forEach(m=>{if(!m||!m.id||!Array.isArray(m.events)||!Array.isArray(m.sets)||!Array.isArray(m.members)){skip++;return;}
   if(m.tourId){m.tourId=tmap[m.tourId]||(DB.tours.some(t=>t.id===m.tourId)?m.tourId:undefined);if(!m.tourId)delete m.tourId;}
   m.teamId=map[m.teamId]||(m.teamId&&DB.teams.some(t=>t.id===m.teamId)?m.teamId:(map['_']||Object.values(map)[0]||DB.teams[0].id));
@@ -1171,16 +1216,17 @@ async function makeImage(){
  document.body.classList.add('capture');
  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
  const el=$('#app');let cv;
+ el.querySelectorAll('svg *').forEach(n=>{const cs=getComputedStyle(n);['fill','stroke','stroke-width','stroke-dasharray','stroke-linecap','opacity','font-size','font-weight','text-anchor'].forEach(p=>{const v=cs.getPropertyValue(p);if(v)n.style.setProperty(p,v);});});
  try{const w=el.scrollWidth,h=el.scrollHeight,sc=Math.max(0.5,Math.min(2,Math.sqrt(14e6/(w*h))));
   const bg=getComputedStyle(document.body).backgroundColor,skip=n=>!!(n.classList&&n.classList.contains('noprint'));
   if(lib==='h2c')cv=await html2canvas(el,{scale:sc,backgroundColor:bg,windowWidth:1010,ignoreElements:skip});
   else{const o={pixelRatio:sc,backgroundColor:bg,width:w,height:h,filter:n=>!skip(n)};await htmlToImage.toCanvas(el,o);cv=await htmlToImage.toCanvas(el,o);}}
  catch(e){toast('画像を作れませんでした');return;}
- finally{document.body.classList.remove('capture');}
+ finally{document.body.classList.remove('capture');render();}
  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
  if(!blob){toast('画像を作れませんでした');return;}
- const m=curM(),label=UI.tab==='agg'?'集計':UI.mtab==='order'?'オーダー':'分析';
- const name=`${label}_${(UI.tab==='match'&&m?fmtD(m.date)+'_'+mTitle(m):today()).replace(/[\/\s]/g,'')}.png`.replace(/[\\:*?"<>|]/g,'_');
+ const m=curM(),label=UI.tab==='board'?'ボード':UI.tab==='agg'?'集計':UI.mtab==='order'?'オーダー':'分析';
+ const name=`${label}_${(UI.tab==='board'&&curBP()?curBP().name+'_'+(curPat()||{}).name:UI.tab==='match'&&m?fmtD(m.date)+'_'+mTitle(m):today()).replace(/[\/\s]/g,'')}.png`.replace(/[\\:*?"<>|]/g,'_');
  openSheet({type:'img',url:URL.createObjectURL(blob),blob,name});
 }
 /* ---------- リンクで共有 ---------- */
@@ -1191,17 +1237,55 @@ async function makeLink(ms,title){
  if(!window.CompressionStream){toast('この端末ではリンクを作れません。「試合データを送る」を使ってください');return;}
  if(!ms.length){toast('共有する試合がありません');return;}
  const ids=[...new Set(ms.map(m=>m.teamId))];
- const data={app:'volley-rec',v:2,type:'share',title,teams:DB.teams.filter(t=>ids.includes(t.id)).map(t=>({id:t.id,name:t.name,players:[]})),...extrasFor(ms),matches:ms.map(m=>Object.assign({},m,{events:m.events.map(e=>{const o={k:e.k};if(e.p)o.p=e.p;if(e.in)o.in=e.in;if(e.memo)o.memo=e.memo;if(e.g)o.g=e.g;if(e.op)o.op=e.op;if(e.ft)o.ft=e.ft;if(e.ps)o.ps=e.ps;if(typeof e.lx==='number'){o.lx=e.lx;o.ly=e.ly;}if(e.net)o.net=1;if(e.oob)o.oob=1;return o;})}))};
+ const data={app:'volley-rec',v:3,type:'share',title,teams:DB.teams.filter(t=>ids.includes(t.id)).map(t=>({id:t.id,name:t.name,players:[]})),...extrasFor(ms),matches:ms.map(packMatch)};
  const z=b64u(await zip(new TextEncoder().encode(JSON.stringify(data))));
  const url=location.href.split('#')[0]+'#s='+z;
  openSheet({type:'link',url,count:ms.length,title});
 }
+/* 共有リンク用の詰め込み(v3) ※EVCとPOSCは後ろに足すだけ(並べ替え・削除しない) */
+const EVC=['spike','feint','block','blockout','ace','o_serve','o_spike','o_recv','o_foul','o_other','o_ace','r_serve','r_spike','r_other','serve_miss','spike_miss','connect','omiai','foul','blocked','blockout_x','spiked','feinted','l_other','serve1','rcv','srvc','sub','set_end'];
+const C64='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-.';
+const POSC=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト','センター','前衛','後衛'];
+function packEv(ev){if(ev.some(a=>!EVC.includes(a[0])||(a[1]&&a[1].length>1)))return null;
+ let s='';const ex={};ev.forEach((a,i)=>{s+=C64[EVC.indexOf(a[0])]+(a[1]||'_');const x=Object.assign({},a[2]||{});
+  if(x.x!=null&&x.x>=-30&&x.x<=130&&x.y>=-30&&x.y<=130){const v=(x.x+30)*161+(x.y+30);s+='!'+C64[v>>12]+C64[(v>>6)&63]+C64[v&63];delete x.x;delete x.y;}
+  if(x.g&&x.g.length===1&&C64.includes(x.g)){s+='*'+x.g;delete x.g;}
+  if(Object.keys(x).length)ex[i]=x;});return {s,ex};}
+function unpackEv(s,ex){const ev=[];let i=0;while(i<s.length){const a=[EVC[C64.indexOf(s[i])],s[i+1]==='_'?'':s[i+1]];i+=2;const x=Object.assign({},ex&&ex[ev.length]||{});
+  while(s[i]==='!'||s[i]==='*'){if(s[i]==='!'){const v=C64.indexOf(s[i+1])*4096+C64.indexOf(s[i+2])*64+C64.indexOf(s[i+3]);x.x=Math.floor(v/161)-30;x.y=v%161-30;i+=4;}else{x.g=s[i+1];i+=2;}}
+  if(Object.keys(x).length)a.push(x);ev.push(a);}return ev;}
+function packMatch(m){
+ const mp={};let n=0;const sid=id=>{if(!id)return '';if(!(id in mp)){mp[id]=n<64?C64[n]:'~'+n;n++;}return mp[id];};
+ const o={};Object.keys(m).forEach(k=>{if(!['events','members','sets','rcvOn','srvOn'].includes(k)&&m[k]!==''&&m[k]!=null)o[k]=m[k];});
+ o.members=m.members.map(p=>{const q=[sid(p.id),p.num??'',p.name];if(p.pos)q.push(POSC.includes(p.pos)?POSC.indexOf(p.pos):p.pos);return q;});
+ ['created','updated'].forEach(k=>{if(typeof o[k]==='number')o[k]=o[k].toString(36);});
+ o.sets=m.sets.map(st=>Object.assign({},st,{order:(st.order||[]).map(sid),pos:st.pos?st.pos.map(sid):undefined}));
+ o.ev=m.events.map(e=>{const a=[e.k,sid(e.p)];const x={};if(e.in)x.i=sid(e.in);if(e.ps)x.s=e.ps.map(sid);if(e.g)x.g=e.g;if(e.op)x.o=e.op;if(e.ft)x.f=e.ft;if(e.memo)x.m=e.memo;if(typeof e.lx==='number'){x.x=Math.round(e.lx*100);x.y=Math.round(e.ly*100);}if(e.net)x.n=1;if(e.oob)x.b=1;if(Object.keys(x).length)a.push(x);return a;});
+ const pe=packEv(o.ev);if(pe){o.ev=pe.s;if(Object.keys(pe.ex).length)o.ex=pe.ex;}
+ return o;}
+function unpackMatch(o){
+ const pre=(o.id||uid())+'_';const L=id=>id===''||id==null?null:pre+id;
+ const m=Object.assign({},o);delete m.ev;delete m.ex;
+ ['created','updated'].forEach(k=>{if(typeof m[k]==='string')m[k]=parseInt(m[k],36);});
+ m.members=(o.members||[]).map(q=>({id:L(q[0]),num:q[1],name:q[2],pos:typeof q[3]==='number'?POSC[q[3]]:(q[3]||'')}));
+ const evA=typeof o.ev==='string'?unpackEv(o.ev,o.ex):(o.ev||[]);
+ m.sets=(o.sets||[]).map(st=>{const t=Object.assign({},st,{order:(st.order||[]).map(id=>L(id)||'')});if(st.pos)t.pos=st.pos.map(id=>L(id)||'');else delete t.pos;return t;});
+ m.events=evA.map(a=>{const x=a[2]||{};const e={k:a[0],p:L(a[1]),in:x.i!=null?L(x.i):null,t:0};if(x.s)e.ps=x.s.map(L);if(x.g)e.g=x.g;if(x.o)e.op=x.o;if(x.f)e.ft=x.f;if(x.m)e.memo=x.m;if(x.x!=null){e.lx=x.x/100;e.ly=x.y/100;}if(x.n)e.net=1;if(x.b)e.oob=1;return e;});
+ if(!m.title)m.title='';if(!m.opp)m.opp='';
+ return m;}
+const SHORT_MAX=5000,SHORTS={};
+function isgd(url){return new Promise((ok,ng)=>{const cb='__isgd'+Date.now();const sc=document.createElement('script');let done=false;
+ const end=()=>{delete window[cb];sc.remove();};const tm=setTimeout(()=>{if(done)return;done=true;end();ng(new Error('短縮できませんでした(通信を確認してください)'));},12000);
+ window[cb]=r=>{if(done)return;done=true;clearTimeout(tm);end();if(r&&r.shorturl)ok(r.shorturl);else ng(new Error(r&&r.errorcode===3?'短縮サービスが混んでいます。1分ほど待ってからもう一度押してください':'短縮できませんでした'+(r&&r.errormessage?'('+r.errormessage+')':'')));};
+ sc.onerror=()=>{if(done)return;done=true;clearTimeout(tm);end();ng(new Error('短縮できませんでした(通信を確認してください)'));};
+ sc.src='https://is.gd/create.php?format=json&callback='+cb+'&url='+encodeURIComponent(url);document.head.appendChild(sc);});}
 let REAL=null,SHARED=null;
 async function openShared(text){
  const i=text.indexOf('#s=');if(i<0)throw new Error('共有リンクではありません');
  if(!window.DecompressionStream)throw new Error('この端末では開けません');
  const d=JSON.parse(new TextDecoder().decode(await zip(unb64u(text.slice(i+3).trim()),true)));
  if(!d||d.app!=='volley-rec'||!Array.isArray(d.matches))throw new Error('共有リンクを読めませんでした');
+ if(d.v>=3)d.matches=d.matches.map(unpackMatch);
  if(!UI.shared)REAL=DB;
  SHARED=JSON.parse(JSON.stringify(d));
  DB=migrate({teams:JSON.parse(JSON.stringify(d.teams||[])),tours:JSON.parse(JSON.stringify(d.tours||[])),oppInfo:JSON.parse(JSON.stringify(d.oppInfo||{})),matches:JSON.parse(JSON.stringify(d.matches))});
@@ -1307,9 +1391,12 @@ const ACT={
  linkMatch:()=>{const m=curM();makeLink([m],`${fmtD(m.date)} ${mTitle(m)}`.trim());},
  linkList:()=>{const f=UI.hf;makeLink(DB.matches.filter(m=>matchFilter(m,f)),`試合一覧 ${rangeText(f)}`);},
  linkAgg:()=>{const f=UI.agg;const ms=DB.matches.filter(m=>matchFilter(m,f));makeLink(ms,`集計 ${rangeText(f)}${f.opp?' vs '+f.opp:''}`);},
- linkSend:()=>{const s=UI.sheet;if(navigator.share)navigator.share({title:'バレー記録: '+(s.title||''),url:s.url}).catch(()=>{});else ACT.linkCopy();},
- linkCopy:()=>{const u=UI.sheet.url;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('リンクをコピーしました')).catch(()=>prompt('コピーしてください',u));},
- openLinkText:async()=>{const t=($('#linkIn').value||'').trim();if(!t)return;try{await openShared(t);}catch(e){toast(e.message);}},
+ linkSend:()=>{const s=UI.sheet;if(navigator.share)navigator.share({title:'バレー記録: '+(s.title||''),url:s.short||s.url}).catch(()=>{});else ACT.linkCopy();},
+ linkShort:async()=>{const s=UI.sheet;if(!s||s.busy)return;if(s.url.length>SHORT_MAX){toast('リンクが長すぎて短縮できません。試合を絞ってください');return;}
+  if(SHORTS[s.url]){s.short=SHORTS[s.url];renderSheet();return;}
+  s.busy=true;renderSheet();try{const u=await isgd(s.url);SHORTS[s.url]=u;if(UI.sheet===s){s.short=u;}toast('短縮しました');}catch(e){toast(e.message);}s.busy=false;if(UI.sheet===s)renderSheet();},
+ linkCopy:()=>{const u=UI.sheet.short||UI.sheet.url;(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('リンクをコピーしました')).catch(()=>prompt('コピーしてください',u));},
+ openLinkText:async()=>{const t=($('#linkIn').value||'').trim();if(!t)return;if(/^https?:\/\/(is|v)\.gd\//.test(t)&&!t.includes('#s=')){toast('短縮URLを開いています…');location.href=t;return;}try{await openShared(t);}catch(e){toast(e.message);}},
  shClose:()=>closeShared(),
  shImport:()=>{const d=SHARED;closeShared();try{const r=importData(JSON.parse(JSON.stringify(d)));render();toast(`取り込みました: 追加${r.add}・更新${r.rep}${r.skip?'・変更なし'+r.skip:''}`);}catch(e){toast('取り込めませんでした: '+e.message);}},
  nmAll:()=>{UI.sheet.sel=teamOf(UI.sheet.team).players.map(p=>p.id);renderSheet();},
@@ -1347,7 +1434,7 @@ const ACT={
  addPlayer:()=>{const t=teamOf(UI.tid);const mx=t.players.reduce((a,p)=>Math.max(a,+p.num||0),0);t.players.push({id:uid(),num:mx+1,name:'選手'+(t.players.length+1),pos:''});save();render();},
  delPlayer:e=>{const t=teamOf(UI.tid);const p=t.players.find(x=>x.id===e.dataset.id);if(!p||!confirm(`${p.name} を削除しますか?(過去の試合の記録は残ります)`))return;t.players=t.players.filter(x=>x!==p);save();render();},
  pickFile:()=>$('#fileIn').click(),
- backup:()=>shareFile(`バレー記録_バックアップ_${today().replace(/-/g,'')}.json`,JSON.stringify({app:'volley-rec',v:2,type:'backup',exported:Date.now(),teams:DB.teams,tours:DB.tours,oppInfo:DB.oppInfo,matches:DB.matches}),'application/json'),
+ backup:()=>shareFile(`バレー記録_バックアップ_${today().replace(/-/g,'')}.json`,JSON.stringify({app:'volley-rec',v:2,type:'backup',exported:Date.now(),teams:DB.teams,tours:DB.tours,oppInfo:DB.oppInfo,boards:boards(),matches:DB.matches}),'application/json'),
  csvAll:()=>shareFile(`バレー記録_全記録_${today().replace(/-/g,'')}.csv`,csvOf(DB.matches),'text/csv'),
  wipe:()=>{if(!confirm('すべての試合とメンバーを削除します。よろしいですか?'))return;if(!confirm('本当に削除しますか?元に戻せません。'))return;DB=migrate(blankDB());fixUI();save();render();},
 };
@@ -1375,6 +1462,147 @@ const CH={
 };
 const RO_OK=new Set(['spkPl','srvPl','pin','tourAgg','who','aggOpp','ai','aiCopy','aiClaude','aiShare','nav','goHome','openMatch','mtab','aset','closeSheet','bgClose','flt','fper','toAgg','logAll','shareText','shareOrder','shareAgg','makeImg','imgSend','tip','shImport','shClose','print']);
 const RO_CH=new Set(['af','fdate','ftour']);
+/* ---------- ホワイトボード ---------- */
+const BW=100,BH=200,BM=14;
+const BPOS9=[[10,113],[30,113],[50,121],[70,113],[90,113],[50,148],[20,180],[50,184],[80,180]];
+const BPOS6=[[18,114],[50,114],[82,114],[18,168],[50,174],[82,168]];
+const OPPLAB9=['L','中L','S','中R','R','H','BL','BC','BR'],OPPLAB6=['L','C','R','BL','BC','BR'];
+const PENS=[['k','黒','var(--ink)'],['r','赤','var(--loss)'],['b','青','var(--pri2)']];
+const penV=c=>(PENS.find(p=>p[0]===c)||PENS[0])[2];
+const r1=v=>Math.round(v*10)/10;
+function boards(){if(!Array.isArray(DB.boards))DB.boards=[];return DB.boards;}
+function curBP(){return boards().find(b=>b.id===UI.bp)||null;}
+function curPat(bp){bp=bp||curBP();if(!bp||!bp.pats.length)return null;return bp.pats.find(p=>p.id===UI.bpat)||bp.pats[0];}
+function bpTeam(bp){return DB.teams.find(t=>t.id===bp.teamId)||DB.teams[0];}
+function touchB(){const bp=curBP();if(bp)bp.updated=Date.now();save();}
+function basePat(bp,name){
+ const six=bp.rule==='six',T=bpTeam(bp),spots=six?BPOS6:BPOS9;let ids=[];
+ const lm=DB.matches.filter(m=>m.teamId===T.id&&m.rule===(six?'six':'nine')).sort((a,b)=>b.created-a.created)[0];
+ if(lm&&lm.sets[0]){const s0=lm.sets[0];const arr=!six&&s0.pos&&s0.pos.some(Boolean)?s0.pos:s0.order;
+  ids=(arr||[]).map(id=>{const mm=lm.members.find(p=>p.id===id);if(!mm)return null;const tp=T.players.find(p=>p.id===id)||T.players.find(p=>p.name===mm.name);return tp?tp.id:null;});}
+ if(!ids.some(Boolean))ids=T.players.slice(0,spots.length).map(p=>p.id);
+ const toks=[];
+ spots.forEach(([x,y],i)=>toks.push({id:uid(),t:'opp',lab:(six?OPPLAB6:OPPLAB9)[i],x:BW-x,y:BH-y}));
+ spots.forEach(([x,y],i)=>{if(ids[i])toks.push({id:uid(),t:'own',pid:ids[i],x,y});});
+ toks.push({id:uid(),t:'ball',x:84,y:80});
+ return {id:uid(),name:name||'基本の並び',note:'',toks,lines:[]};
+}
+function tokLabel(bp,t){if(t.t==='own'){const p=bpTeam(bp).players.find(x=>x.id===t.pid);return p?p.name:'?';}return t.lab||'';}
+function pathD(pts){return pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join('');}
+function boardSVG(bp,pt){
+ const six=bp.rule==='six',mode=UI.bmode||'move';
+ let g=`<svg id="bsvg" class="bsvg m-${mode}" viewBox="${-BM} ${-BM} ${BW+2*BM} ${BH+2*BM}" role="img" aria-label="ホワイトボード ${esc(pt.name)}"><defs>${PENS.map(([c,,v])=>`<marker id="ah-${c}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" style="fill:${v}"/></marker>`).join('')}</defs>`;
+ g+=`<rect x="${-BM}" y="${-BM}" width="${BW+2*BM}" height="${BH+2*BM}" class="bout"/><rect x="0" y="0" width="${BW}" height="${BH}" class="bcourt"/>`;
+ if(six)g+=`<path class="bl2" d="M0 ${BH/2-100/3}H${BW}M0 ${BH/2+100/3}H${BW}"/>`;
+ g+=`<line class="bnet" x1="-7" x2="${BW+7}" y1="${BH/2}" y2="${BH/2}"/><text class="blab" x="${BW/2}" y="-5">相手コート</text><text class="blab" x="${BW/2}" y="${BH+9}">自チーム</text>`;
+ pt.lines.forEach((l,i)=>{g+=`<path class="bpen" data-line="${i}" d="${pathD(l.pts)}" style="stroke:${penV(l.c)}" marker-end="url(#ah-${l.c})"/>`;if(mode==='erase')g+=`<path class="bhit" data-line="${i}" d="${pathD(l.pts)}"/>`;});
+ const order=t=>t.t==='ball'?2:t.id===UI.bsel?1:0;
+ pt.toks.slice().sort((a,b)=>order(a)-order(b)).forEach(t=>{
+  if(t.t==='ball'){g+=`<g class="btok ball${UI.bsel===t.id?' sel':''}" data-tok="${t.id}" transform="translate(${t.x} ${t.y})"><circle class="bhalo" r="7"/><circle r="3.6"/><path d="M-3.6 0Q0 -2 3.6 0M0 -3.6Q-1.8 0 0 3.6" class="bseam"/></g>`;return;}
+  const lab=tokLabel(bp,t).slice(0,3),fs=lab.length<=1?5.2:lab.length===2?4.4:3.6;
+  g+=`<g class="btok ${t.t}${UI.bsel===t.id?' sel':''}" data-tok="${t.id}" transform="translate(${t.x} ${t.y})"><circle class="bhalo" r="9"/><circle r="6.2"/><text y="${(fs*0.36).toFixed(2)}" style="font-size:${fs}px">${esc(lab)}</text></g>`;});
+ return g+'</svg>';
+}
+function vBoard(){
+ const bp=curBP();
+ if(!bp){
+  let h='<div class="top"><h1>ホワイトボード</h1></div><p class="sub">選手を指で動かして、ポジションや動き方を説明できます。プロジェクト(例: チームA)ごとに、いくつもの場面(例: レフトからの攻撃)を保存できます。</p>';
+  const L=boards().slice().sort((a,b)=>(b.updated||0)-(a.updated||0));
+  h+=L.length?L.map(b=>`<button class="card mcard" style="margin-bottom:8px" data-act="bpOpen" data-id="${b.id}"><div class="t">${esc(b.name)}</div><span class="sub">${b.rule==='six'?'6人制':'9人制'}・${esc(bpTeam(b).name)}・${b.pats.length}パターン(${esc(b.pats.slice(0,4).map(p=>p.name).join('、'))}${b.pats.length>4?'…':''})</span></button>`).join(''):'<div class="card"><p class="sub" style="margin:0">まだありません。「＋ 新しいプロジェクト」から作ってください。</p></div>';
+  return h+'<button class="btn pri block" style="margin-top:12px" data-act="bpNew">＋ 新しいプロジェクト</button>';}
+ const pt=curPat(bp);if(pt)UI.bpat=pt.id;
+ const pres=!!UI.bpres,mode=UI.bmode||'move';
+ let h=`<div class="top noprint"><button class="back" data-act="bpBack">‹ 一覧</button><h1>${esc(bp.name)}</h1><button class="btn sm" data-act="bpEdit">設定</button></div>`;
+ h+=`<div class="tabs noprint bpats">${bp.pats.map(p=>`<button class="${pt&&p.id===pt.id?'on':''}" data-act="patSel" data-id="${p.id}">${esc(p.name)}</button>`).join('')}<button data-act="patNew">＋ 追加</button></div>`;
+ if(!pt)return h+'<p class="sub">「＋ 追加」でパターンを作ってください。</p>';
+ const i=bp.pats.indexOf(pt);
+ h+=`<div class="btitle"><b>${esc(pt.name)}</b>${pres?`<span class="sub">${i+1}/${bp.pats.length}</span>`:''}</div>`;
+ if(!pres)h+=`<div class="row noprint bctl"><div class="seg" style="flex:1">${[['move','動かす'],['pen','ペン'],['erase','線を消す']].map(([v,l])=>`<button class="${mode===v?'on':''}" data-act="bMode" data-v="${v}">${l}</button>`).join('')}</div></div>`
+  +(mode==='pen'?`<div class="row noprint bctl">${PENS.map(([c,l,v])=>`<button class="btn sm pen${(UI.bcolor||'k')===c?' on':''}" data-act="bColor" data-v="${c}"><i style="background:${v}"></i>${l}</button>`).join('')}<button class="btn sm" data-act="lineUndo" ${pt.lines.length?'':'disabled'}>↶ 線</button></div>`:'')
+  +(mode==='erase'?`<div class="row noprint bctl"><span class="sub" style="flex:1">消したい線をタップ</span><button class="btn sm danger" data-act="lineClear" ${pt.lines.length?'':'disabled'}>線を全部消す</button></div>`:'');
+ h+=`<div class="bwrap">${boardSVG(bp,pt)}</div>`;
+ if(pres){h+=`<div class="row noprint" style="margin-top:8px"><button class="btn" data-act="presMv" data-v="-1" ${i?'':'disabled'}>◀ 前</button><button class="btn" data-act="presToggle">終了</button><button class="btn" data-act="presMv" data-v="1" ${i<bp.pats.length-1?'':'disabled'}>次 ▶</button></div>`;
+  if(pt.note)h+=`<div class="card bnote">${esc(pt.note).replace(/\n/g,'<br>')}</div>`;return h;}
+ if(pt.note)h+=`<div class="card bnote printonly">${esc(pt.note).replace(/\n/g,'<br>')}</div>`;
+ const sel=pt.toks.find(t=>t.id===UI.bsel);
+ if(sel)h+=`<div class="card noprint bselp"><b>${sel.t==='ball'?'ボール':esc(tokLabel(bp,sel))}</b><span class="sub">${sel.t==='own'?'自チーム':sel.t==='opp'?'相手':''} を選択中</span><span style="flex:1"></span>${sel.t==='opp'?'<button class="btn sm" data-act="tokLab">名前</button>':''}<button class="btn sm danger" data-act="tokDel">コートから外す</button></div>`;
+ else h+=`<p class="sub noprint" style="margin:6px 0">${mode==='move'?'選手やボールを指で動かせます。タップすると選択できます。':mode==='pen'?'コートの上を指でなぞると矢印を書けます。':'消したい線をタップしてください。'}</p>`;
+ const T=bpTeam(bp),on=new Set(pt.toks.filter(t=>t.t==='own').map(t=>t.pid));const off=T.players.filter(p=>!on.has(p.id));
+ h+=`<details class="noprint card" ${UI.bpal?'open':''} data-ch2="bpal"><summary><b>コートに出す</b> <span class="sub">控え${off.length}人${pt.toks.some(t=>t.t==='ball')?'':'・ボールなし'}</span></summary><div class="chips" style="margin-top:6px">${off.map(p=>`<button class="chip" data-act="addOwn" data-id="${p.id}">${esc(p.name)}<small>${p.pos?esc(p.pos):'自チーム'}</small></button>`).join('')}<button class="chip opp" data-act="addOpp">＋ 相手<small>相手の選手</small></button>${pt.toks.some(t=>t.t==='ball')?'':'<button class="chip" data-act="addBall">ボール<small>コートに出す</small></button>'}</div>${T.players.length?'':'<p class="sub">「メンバー」画面で選手を登録すると、ここから出せます。</p>'}</details>`;
+ h+=`<label class="f noprint"><span>メモ(説明のポイント)</span><textarea data-ch="patNote" rows="3" placeholder="例) レフトから打たれたら、バックライトはストレートを締める">${esc(pt.note||'')}</textarea></label>`;
+ h+=`<div class="row noprint" style="margin-top:10px"><button class="btn pri" data-act="presToggle">▶ 説明モード</button><button class="btn" data-act="makeImg">画像で送る</button></div>`;
+ h+=`<div class="row noprint" style="margin-top:8px"><button class="btn sm" data-act="patEdit">パターンの名前・削除</button><button class="btn sm" data-act="patDup">複製</button><button class="btn sm" data-act="patMv" data-v="-1" ${i?'':'disabled'}>◀ 前へ</button><button class="btn sm" data-act="patMv" data-v="1" ${i<bp.pats.length-1?'':'disabled'}>後へ ▶</button></div>`;
+ return h;
+}
+function boardSheet(s){
+ let h='';
+ if(s.type==='bpNew'||s.type==='bpEdit'){const bp=s.type==='bpEdit'?curBP():null;
+  h+=`<h2>${bp?'プロジェクトの設定':'新しいプロジェクト'}</h2><label class="f"><span>名前</span><input id="bpName" placeholder="例) チームA・秋季大会対策" value="${esc(bp?bp.name:(s.name||''))}"></label>`;
+  if(DB.teams.length>1)h+=`<label class="f"><span>自チーム(出せる選手)</span><select id="bpTeam">${DB.teams.map(t=>`<option value="${t.id}" ${(bp?bp.teamId:s.team)===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>`;
+  if(!bp)h+=`<label class="f"><span>種類</span><div class="seg">${[['nine','9人制'],['six','6人制']].map(([v,l])=>`<button class="${(s.rule||'nine')===v?'on':''}" data-act="bpRule" data-v="${v}">${l}</button>`).join('')}</div></label><p class="sub">最初のパターン「基本の並び」に、直近の試合のポジションで選手を並べます。</p>`;
+  h+=`<div class="row" style="margin-top:12px">${bp?'<button class="btn danger" data-act="bpDel">削除</button>':''}<button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="${bp?'bpSave':'bpCreate'}">${bp?'保存':'作成する'}</button></div>`;}
+ else if(s.type==='patNew'){const pt=curPat();
+  h+=`<h2>パターンを追加</h2><label class="f"><span>名前</span><input id="patName" placeholder="例) レフトからの攻撃" value=""></label><label class="f"><span>はじめの並び</span><div class="seg">${[['copy','今のパターンをコピー'],['base','基本の並び']].map(([v,l])=>`<button class="${(s.from||(pt?'copy':'base'))===v?'on':''}" data-act="patFrom" data-v="${v}" ${!pt&&v==='copy'?'disabled':''}>${l}</button>`).join('')}</div></label><div class="row" style="margin-top:12px"><button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="patCreate">追加する</button></div>`;}
+ else if(s.type==='patEdit'){const pt=curPat();
+  h+=`<h2>パターンの設定</h2><label class="f"><span>名前</span><input id="patName" value="${esc(pt.name)}"></label><div class="row" style="margin-top:12px"><button class="btn danger" data-act="patDel">削除</button><button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="patSave">保存</button></div>`;}
+ return h;
+}
+const BACT={
+ bpNew:()=>openSheet({type:'bpNew',rule:'nine',team:(DB.teams.find(t=>t.id===UI.tid)||DB.teams[0]).id}),
+ bpRule:e=>{const s=UI.sheet;s.name=$('#bpName').value;s.rule=e.dataset.v;renderSheet();},
+ bpCreate:()=>{const s=UI.sheet,name=($('#bpName').value||'').trim()||'プロジェクト'+(boards().length+1);const team=$('#bpTeam')?$('#bpTeam').value:s.team;
+  const bp={id:uid(),name,teamId:team,rule:s.rule||'nine',pats:[],created:Date.now(),updated:Date.now()};bp.pats.push(basePat(bp));boards().push(bp);
+  UI.bp=bp.id;UI.bpat=bp.pats[0].id;UI.bsel='';UI.bpres=false;UI.sheet=null;save();render();toast('作成しました。「＋ 追加」で場面ごとのパターンを足せます');},
+ bpOpen:e=>{UI.bp=e.dataset.id;UI.bpat='';UI.bsel='';UI.bpres=false;window.scrollTo(0,0);render();},
+ bpBack:()=>{UI.bp='';UI.bsel='';UI.bpres=false;render();},
+ bpEdit:()=>openSheet({type:'bpEdit'}),
+ bpSave:()=>{const bp=curBP();bp.name=($('#bpName').value||'').trim()||bp.name;if($('#bpTeam'))bp.teamId=$('#bpTeam').value;UI.sheet=null;touchB();render();},
+ bpDel:()=>{const bp=curBP();if(!confirm(`プロジェクト「${bp.name}」と${bp.pats.length}個のパターンを削除しますか?`))return;DB.boards=boards().filter(b=>b!==bp);UI.bp='';UI.sheet=null;save();render();toast('削除しました');},
+ patSel:e=>{UI.bpat=e.dataset.id;UI.bsel='';render();},
+ patNew:()=>openSheet({type:'patNew'}),
+ patFrom:e=>{UI.sheet.from=e.dataset.v;const v=$('#patName').value;renderSheet();$('#patName').value=v;},
+ patCreate:()=>{const bp=curBP(),cur=curPat(bp),s=UI.sheet;const name=($('#patName').value||'').trim()||'パターン'+(bp.pats.length+1);
+  let p;if((s.from||(cur?'copy':'base'))==='copy'&&cur){p=JSON.parse(JSON.stringify(cur));p.id=uid();p.name=name;p.note='';p.toks.forEach(t=>t.id=uid());}else p=basePat(bp,name);
+  bp.pats.splice(cur?bp.pats.indexOf(cur)+1:bp.pats.length,0,p);UI.bpat=p.id;UI.bsel='';UI.sheet=null;touchB();render();toast('「'+name+'」を追加しました');},
+ patEdit:()=>openSheet({type:'patEdit'}),
+ patSave:()=>{const pt=curPat();pt.name=($('#patName').value||'').trim()||pt.name;UI.sheet=null;touchB();render();},
+ patDel:()=>{const bp=curBP(),pt=curPat(bp);if(!confirm(`パターン「${pt.name}」を削除しますか?`))return;const i=bp.pats.indexOf(pt);bp.pats.splice(i,1);UI.bpat=(bp.pats[i]||bp.pats[i-1]||{}).id||'';UI.sheet=null;touchB();render();},
+ patDup:()=>{const bp=curBP(),pt=curPat(bp);const p=JSON.parse(JSON.stringify(pt));p.id=uid();p.name=pt.name+'(コピー)';p.toks.forEach(t=>t.id=uid());bp.pats.splice(bp.pats.indexOf(pt)+1,0,p);UI.bpat=p.id;UI.bsel='';touchB();render();toast('複製しました');},
+ patMv:e=>{const bp=curBP(),pt=curPat(bp),i=bp.pats.indexOf(pt),j=i+(+e.dataset.v);if(j<0||j>=bp.pats.length)return;bp.pats.splice(i,1);bp.pats.splice(j,0,pt);touchB();render();},
+ bMode:e=>{UI.bmode=e.dataset.v;UI.bsel='';render();},
+ bColor:e=>{UI.bcolor=e.dataset.v;render();},
+ lineUndo:()=>{const pt=curPat();pt.lines.pop();touchB();render();},
+ lineClear:()=>{const pt=curPat();if(!confirm('このパターンの線を全部消しますか?'))return;pt.lines=[];touchB();render();},
+ addOwn:e=>{const pt=curPat(),n=pt.toks.filter(t=>t.t==='own').length;pt.toks.push({id:uid(),t:'own',pid:e.dataset.id,x:r1(30+(n%5)*10),y:r1(150+(n%3)*6)});UI.bsel=pt.toks[pt.toks.length-1].id;UI.bpal=true;touchB();render();},
+ addOpp:()=>{const pt=curPat(),n=pt.toks.filter(t=>t.t==='opp').length;pt.toks.push({id:uid(),t:'opp',lab:String(n+1),x:r1(30+(n%5)*10),y:r1(50-(n%3)*6)});UI.bsel=pt.toks[pt.toks.length-1].id;UI.bpal=true;touchB();render();},
+ addBall:()=>{const pt=curPat();pt.toks.push({id:uid(),t:'ball',x:50,y:90});touchB();render();},
+ tokDel:()=>{const pt=curPat();pt.toks=pt.toks.filter(t=>t.id!==UI.bsel);UI.bsel='';touchB();render();},
+ tokLab:()=>{const pt=curPat(),t=pt.toks.find(x=>x.id===UI.bsel);if(!t)return;const v=prompt('相手の選手の表示(3文字まで。例: 4、L、エース)',t.lab||'');if(v==null)return;t.lab=v.trim().slice(0,3);touchB();render();},
+ presToggle:()=>{UI.bpres=!UI.bpres;UI.bsel='';UI.bmode='move';window.scrollTo(0,0);render();},
+ presMv:e=>{const bp=curBP(),i=bp.pats.indexOf(curPat(bp)),j=i+(+e.dataset.v);if(bp.pats[j]){UI.bpat=bp.pats[j].id;render();}},
+};
+const BCH={patNote:e=>{const pt=curPat();if(!pt)return;pt.note=e.value;touchB();}};
+let BD=null;
+function svgPt(svg,ev){const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());}
+document.addEventListener('pointerdown',ev=>{const svg=ev.target.closest&&ev.target.closest('#bsvg');if(!svg||UI.tab!=='board')return;const pt=curPat();if(!pt)return;
+ const p=svgPt(svg,ev),mode=UI.bmode||'move';
+ if(mode==='move'){const tg=ev.target.closest('[data-tok]');if(!tg){if(UI.bsel){UI.bsel='';render();}return;}
+  const t=pt.toks.find(x=>x.id===tg.dataset.tok);if(!t)return;tg.parentNode.appendChild(tg);
+  BD={t,el:tg,svg,dx:t.x-p.x,dy:t.y-p.y,sx:p.x,sy:p.y,moved:false};}
+ else if(mode==='pen'){const el=document.createElementNS('http://www.w3.org/2000/svg','path');el.setAttribute('class','bpen');el.style.stroke=penV(UI.bcolor||'k');svg.appendChild(el);BD={pen:true,svg,el,pts:[[r1(p.x),r1(p.y)]]};}
+ else{const ln=ev.target.closest('[data-line]');if(ln){pt.lines.splice(+ln.dataset.line,1);touchB();render();}return;}
+ try{svg.setPointerCapture(ev.pointerId);}catch(e){}ev.preventDefault();});
+document.addEventListener('pointermove',ev=>{if(!BD)return;const p=svgPt(BD.svg,ev);ev.preventDefault();
+ if(BD.pen){const l=BD.pts[BD.pts.length-1];if(Math.hypot(p.x-l[0],p.y-l[1])>1.5){BD.pts.push([r1(p.x),r1(p.y)]);BD.el.setAttribute('d',pathD(BD.pts));}return;}
+ if(Math.hypot(p.x-BD.sx,p.y-BD.sy)>1.2)BD.moved=true;if(!BD.moved)return;
+ BD.t.x=r1(Math.min(BW+BM-3,Math.max(-BM+3,p.x+BD.dx)));BD.t.y=r1(Math.min(BH+BM-3,Math.max(-BM+3,p.y+BD.dy)));BD.el.setAttribute('transform',`translate(${BD.t.x} ${BD.t.y})`);});
+function bEnd(){if(!BD)return;const d=BD;BD=null;const pt=curPat();
+ if(d.pen){if(d.pts.length>2&&pt){pt.lines.push({c:UI.bcolor||'k',pts:d.pts});touchB();}render();return;}
+ if(d.moved)touchB();else UI.bsel=UI.bsel===d.t.id?'':d.t.id;render();}
+document.addEventListener('pointerup',bEnd);document.addEventListener('pointercancel',bEnd);
+document.addEventListener('toggle',ev=>{if(ev.target.dataset&&ev.target.dataset.ch2==='bpal')UI.bpal=ev.target.open;},true);
+
+Object.assign(ACT,BACT);Object.assign(CH,BCH);
 document.addEventListener('click',ev=>{const e=ev.target.closest('[data-act]');if(!e)return;if(UI.shared&&!RO_OK.has(e.dataset.act))return;if(e.dataset.act!=='bgClose'&&ev.target.closest('[data-stop]')&&!e.closest('[data-stop]'))return;const f=ACT[e.dataset.act];if(f){if(e.dataset.act==='bgClose'&&ev.target!==e)return;f(e,ev);}});
 document.addEventListener('change',ev=>{const e=ev.target.closest('[data-ch]');if(!e)return;if(UI.shared&&!RO_CH.has(e.dataset.ch))return;const f=CH[e.dataset.ch];if(f)f(e,ev);});
 $('#fileIn').addEventListener('change',async ev=>{const f=ev.target.files[0];ev.target.value='';if(!f)return;try{const r=importData(JSON.parse(await f.text()));toast(`読み込みました: 追加${r.add}・更新${r.rep}${r.skip?'・変更なし'+r.skip:''}${r.tAdd?'・チーム追加'+r.tAdd:''}`);render();}catch(e){toast('読み込めませんでした: '+e.message);}});
