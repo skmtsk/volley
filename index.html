@@ -234,6 +234,7 @@ nav#nav svg{width:24px;height:24px}
 .yth{width:96px;height:54px;object-fit:cover;border-radius:6px;display:block;background:var(--neuBg)}.ythw{flex:0 0 96px}
 .micon{flex:0 0 32px;font-size:22px;text-align:center}
 .tocnt{margin-top:4px}
+.imgprev{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--neuBg);-webkit-overflow-scrolling:touch}.imgprev img{width:100%;display:block}
 .imgs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:50vh;overflow:auto;margin:8px 0}.imgs img{width:100%;border-radius:6px;border:1px solid var(--line)}
 body.capture .bsvg{width:520px}
 body.capture .printonly{display:block}
@@ -257,7 +258,7 @@ body.capture .printonly{display:block}
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 <script>
 'use strict';
-const APPV='1.13.3';
+const APPV='1.13.4';
 const STORE='volleyRec.v1';
 const POS9=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト'];
 // key, label, 得失, 分類, 選手入力(req=必須/opt=任意/auto=サーバー自動/none=不要/sub), 表示(any/self=自サーブ中/opp=相手サーブ中), 限定(nine/practice)
@@ -870,12 +871,12 @@ const IDB={p:null,open(){return this.p||(this.p=new Promise((ok,ng)=>{const r=in
 function mediaHTML(m){
  const L=(m.links||[]).filter(x=>okUrl(x.url)),F=m.files||[],ro=UI.shared;
  if(ro&&!L.length)return '';
- let h='<h2>動画・資料</h2><div class="card">';
+ let h='<div class="noprint"><h2>動画・資料</h2><div class="card">';
  if(!L.length&&(ro||!F.length))h+='<p class="sub" style="margin:0 0 8px">試合の動画(YouTubeなど)のリンクや、スコアシートの写真などを、いつでも追加できます。</p>';
  L.forEach(x=>{const yt=ytId(x.url),u=esc(x.url.trim());h+=`<div class="media">${yt?`<a href="${u}" target="_blank" rel="noopener" class="ythw"><img class="yth" src="https://i.ytimg.com/vi/${yt}/mqdefault.jpg" alt="" loading="lazy"></a>`:'<span class="micon">🔗</span>'}<div class="mt"><a href="${u}" target="_blank" rel="noopener"><b>${esc(x.title||(yt?'YouTube動画':'リンク'))}</b></a><br><span class="sub">${esc(x.url.replace(/^https?:\/\//,'').slice(0,40))}</span></div>${ro?'':`<button class="btn sm" data-act="mLinkEdit" data-id="${x.id}">編集</button>`}</div>`;});
  if(!ro)F.forEach(f=>{h+=`<div class="media"><span class="micon">${/^image/.test(f.type)?'🖼':/^video/.test(f.type)?'🎬':'📄'}</span><div class="mt"><b>${esc(f.name)}</b><br><span class="sub">${fmtSize(f.size||0)}・この端末だけに保存</span></div><button class="btn sm" data-act="mFileOpen" data-id="${f.id}">開く</button><button class="btn sm" data-act="mFileDel" data-id="${f.id}">削除</button></div>`;});
  if(!ro)h+=`<div class="row noprint" style="margin-top:8px"><button class="btn sm" data-act="mLinkAdd">＋ 動画リンク</button><button class="btn sm" data-act="mFileAdd">＋ ファイル</button></div>`;
- return h+'</div>';
+ return h+'</div></div>';
 }
 function vAna(m){
  const R=replay(m),nine=isNine(m);
@@ -1097,7 +1098,7 @@ function renderSheet(){
   h+=tp.length?tp.map(p=>`<label class="mcheck"><input type="checkbox" data-ch="nmSel" data-id="${p.id}" ${sel.includes(p.id)?'checked':''}><span>${esc(p.name)} <span class="sub">${p.num!==''&&p.num!=null?'#'+esc(p.num):''} ${esc(p.pos||'')}</span></span></label>`).join(''):'<p class="sub">このチームには選手が登録されていません。後から「準備」で追加できます。</p>';
   h+=`<p class="sub">選ばなくても作成できます。あとから「準備」でいつでも追加・変更できます。</p><div class="row" style="margin-top:12px"><button class="btn" data-act="closeSheet">やめる</button><button class="btn pri" data-act="createMatch">作成する</button></div>`;
  }else if(s.type==='img'){
-  h+=`<h2>画像ができました</h2><img src="${s.url}" alt="${esc(s.name)}" style="width:100%;border-radius:8px;border:1px solid var(--line);margin:8px 0"><p class="sub">「送る・保存」から、LINEで送る・写真に保存・「プリント」(PDFにもできます)を選べます。画像を長押ししても保存できます。折りたたんでいた部分は画像に入りません(開いてから作ると入ります)。</p><div class="row" style="margin-top:8px"><button class="btn" data-act="closeSheet">閉じる</button><button class="btn pri" data-act="imgSend">送る・保存</button></div>`;
+  h+=`<h2>画像ができました</h2><div class="row" style="margin:6px 0 8px"><button class="btn" data-act="closeSheet">閉じる</button><button class="btn pri" data-act="imgSend">送る・保存</button></div><div class="imgprev"><img src="${s.url}" alt="${esc(s.name)}"></div><p class="sub">「送る・保存」から、LINEで送る・写真に保存・「プリント」(PDFにもできます)を選べます。うまくいかないときは、画像を長押しして保存してください。折りたたんでいた部分は画像に入りません(開いてから作ると入ります)。</p>`;
  }else if(s.type==='who'){
   const nine=UI.tab==='agg'?UI.agg.rule!=='six':isNine(m);
   h+=`<h2>${esc(s.k==='serve1'?'自チーム 1本目ミス':s.k==='o_ace'?'相手サービスエース(受けた選手)':s.k==='_rcvx'?'カットで失点(エース・カットミス)':plabel(s.k,nine))}</h2><p class="sub">${UI.tab==='agg'?'集計の条件に合う試合の合計です。':'この画面に出している範囲の合計です。'}${['ace','serve_miss','serve1'].includes(s.k)?'サーブを打った選手で数えています。':''}</p>${whoHTML(LASTROWS,s.k,s.side,nine)}<button class="btn block" style="margin-top:12px" data-act="closeSheet">閉じる</button>`;
@@ -1229,7 +1230,7 @@ function newMatchObj(rule,kind,teamId,sel,tourId){
 }
 function shareFile(name,text,mime){
  const blob=text instanceof Blob?text:new Blob([text],{type:mime});
- try{const f=new File([blob],name,{type:mime});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:name}).catch(()=>{});return;}}catch(e){}
+ try{const f=new File([blob],name,{type:mime});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(e=>{if(e&&e.name!=='AbortError')toast('送れませんでした。画像なら長押しで保存できます');});return;}}catch(e){}
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
 }
 function shareText(t){if(navigator.share){navigator.share({text:t}).catch(()=>{});return;}try{navigator.clipboard.writeText(t);toast('コピーしました');}catch(e){prompt('コピーしてください',t);}}
@@ -1279,7 +1280,7 @@ async function makeImage(){
  el.querySelectorAll('svg *').forEach(n=>{const cs=getComputedStyle(n);['fill','stroke','stroke-width','stroke-dasharray','stroke-linecap','opacity','font-size','font-weight','text-anchor'].forEach(p=>{const v=cs.getPropertyValue(p);if(v)n.style.setProperty(p,v);});});
  try{const w=el.scrollWidth,h=el.scrollHeight,sc=Math.max(0.5,Math.min(2,Math.sqrt(14e6/(w*h))));
   const bg=getComputedStyle(document.body).backgroundColor,skip=n=>!!(n.classList&&n.classList.contains('noprint'));
-  if(lib==='h2c')cv=await html2canvas(el,{scale:sc,backgroundColor:bg,windowWidth:1010,ignoreElements:skip});
+  if(lib==='h2c')cv=await Promise.race([html2canvas(el,{scale:sc,backgroundColor:bg,windowWidth:1010,ignoreElements:skip,imageTimeout:4000}),new Promise((_,ng)=>setTimeout(()=>ng(new Error('timeout')),30000))]);
   else{const o={pixelRatio:sc,backgroundColor:bg,width:w,height:h,filter:n=>!skip(n)};await htmlToImage.toCanvas(el,o);cv=await htmlToImage.toCanvas(el,o);}}
  catch(e){toast('画像を作れませんでした');return;}
  finally{document.body.classList.remove('capture');render();}
@@ -1625,7 +1626,7 @@ function boardSheet(s){
  else if(s.type==='bimg'){const bp=curBP(),pt=curPat(bp);
   h+=`<h2>画像で送る</h2><p class="sub">${esc(bp.name)}・${bp.pats.length}パターン</p><div class="pgrid" style="grid-template-columns:1fr"><button class="pbtn n" data-act="bImgGo" data-v="one">このパターンだけ<small>${esc(pt.name)}</small></button><button class="pbtn n" data-act="bImgGo" data-v="all1">全パターンを1枚にまとめる<small>2列に並べた1枚の画像</small></button><button class="pbtn n" data-act="bImgGo" data-v="each">全パターンを別々の画像で<small>${bp.pats.length}枚をまとめて送る</small></button></div><button class="btn block" style="margin-top:12px" data-act="closeSheet">やめる</button>`;}
  else if(s.type==='imgs'){
-  h+=`<h2>画像ができました(${s.items.length}枚)</h2><div class="imgs">${s.items.map(x=>`<img src="${x.url}" alt="${esc(x.name)}">`).join('')}</div><p class="sub">「まとめて送る」から、LINEで送る・写真に保存などを選べます。画像を長押ししても1枚ずつ保存できます。</p><div class="row" style="margin-top:8px"><button class="btn" data-act="closeSheet">閉じる</button><button class="btn pri" data-act="imgsSend">まとめて送る</button></div>`;}
+  h+=`<h2>画像ができました(${s.items.length}枚)</h2><div class="row" style="margin:6px 0 8px"><button class="btn" data-act="closeSheet">閉じる</button><button class="btn pri" data-act="imgsSend">まとめて送る</button></div><div class="imgs">${s.items.map(x=>`<img src="${x.url}" alt="${esc(x.name)}">`).join('')}</div><p class="sub">「まとめて送る」から、LINEで送る・写真に保存などを選べます。うまくいかないときは、画像を長押しして1枚ずつ保存してください。</p>`;}
  return h;
 }
 /* ボードを画像にする(コート図を直接描くので見切れない) */
@@ -1659,7 +1660,7 @@ async function boardCanvas(bp,pats,cols){
   y+=rh+gap;});
  return cv;
 }
-function shareFiles(files){try{if(navigator.canShare&&navigator.canShare({files})){navigator.share({files}).catch(()=>{});return;}}catch(e){}
+function shareFiles(files){try{if(navigator.canShare&&navigator.canShare({files})){navigator.share({files}).catch(e=>{if(e&&e.name!=='AbortError')toast('送れませんでした。画像を長押しして保存してください');});return;}}catch(e){}
  files.forEach((f,i)=>setTimeout(()=>{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);},i*400));}
 const BACT={
  bImg:()=>{const bp=curBP();if(bp.pats.length<=1)BACT.bImgGo({dataset:{v:'one'}});else openSheet({type:'bimg'});},
