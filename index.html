@@ -257,7 +257,7 @@ body.capture .printonly{display:block}
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 <script>
 'use strict';
-const APPV='1.13.1';
+const APPV='1.13.2';
 const STORE='volleyRec.v1';
 const POS9=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト'];
 // key, label, 得失, 分類, 選手入力(req=必須/opt=任意/auto=サーバー自動/none=不要/sub), 表示(any/self=自サーブ中/opp=相手サーブ中), 限定(nine/practice)
@@ -390,16 +390,17 @@ function mem(m,id){return m.members.find(p=>p.id===id)}
 function numOf(m,id){const p=mem(m,id);return p&&p.num!==''&&p.num!=null?'#'+p.num:''}
 function setOpp(m,i){const s=m.sets[i];return (s&&s.opp)||m.opp||''}
 function deuceOf(m,i){return m.kind==='official'?true:!!(m.sets[i]&&m.sets[i].deuce)}
-function blankSet(m,i,prev){const n=N(m);const s={target:m.kind==='official'?(i===2?15:21):21,first:i%2?'相':'自',deuce:m.kind==='official',opp:'',order:Array(n).fill(''),pos:Array(isNine(m)?9:6).fill('')};if(prev){s.target=prev.target;s.deuce=prev.deuce;s.opp=prev.opp;s.order=prev.order.slice();s.pos=(prev.pos||[]).slice();s.first=prev.first==='自'?'相':'自';}return s;}
-function initSet(m,i){const s=m.sets[i]||{};return {si:i,set:i+1,side:s.first==='相'?'相':'自',slot:1,us:0,them:0,order:(s.order||[]).slice(),pos:(s.pos||[]).slice(),ended:false,rcv:null,sc:null,scRow:null,s1:false}}
+function blankSet(m,i,prev){const n=N(m);const s={target:m.kind==='official'?(i===2?15:21):21,first:i%2?'相':'自',deuce:m.kind==='official',opp:'',order:Array(n).fill(''),pos:Array(isNine(m)?9:6).fill('')};if(isNine(m)&&i>0)s.start='cont';if(prev){s.target=prev.target;s.deuce=prev.deuce;s.opp=prev.opp;s.order=prev.order.slice();s.pos=(prev.pos||[]).slice();s.first=prev.first==='自'?'相':'自';}return s;}
+function startSlot(m,i,prev){const s=m.sets[i]||{},n=N(m),v=s.start;if(v==='cont'){if(prev&&prev.lr)return prev.lr.side==='自'?prev.lr.slot%n+1:prev.slot;return 1;}return +v>=1&&+v<=n?+v:1;}
+function initSet(m,i,prev){const s=m.sets[i]||{};return {si:i,set:i+1,side:s.first==='相'?'相':'自',slot:startSlot(m,i,prev),us:0,them:0,order:(s.order||[]).slice(),pos:(s.pos||[]).slice(),ended:false,rcv:null,sc:null,scRow:null,s1:false}}
 function needWins(m){return Math.ceil(m.sets.length/2)}
 
 function replay(m){
- const n=N(m),rows=[],sums=[];let st=initSet(m,0),w=0,l=0,over=false,orphan=0;
- const closeSet=()=>{const r=st.us>st.them?'○':st.us<st.them?'×':'△';sums.push({si:st.si,set:st.set,opp:setOpp(m,st.si),us:st.us,them:st.them,done:true,res:r});if(r==='○')w++;else if(r==='×')l++;if(m.kind==='official'&&(w>=needWins(m)||l>=needWins(m)))over=true;};
+ const n=N(m),rows=[],sums=[],ends={};let st=initSet(m,0),w=0,l=0,over=false,orphan=0;
+ const closeSet=()=>{ends[st.si]={lastSide:st.lr?st.lr.side:'',next:st.lr?(st.lr.side==='自'?st.lr.slot%n+1:st.slot):1};const r=st.us>st.them?'○':st.us<st.them?'×':'△';sums.push({si:st.si,set:st.set,opp:setOpp(m,st.si),us:st.us,them:st.them,done:true,res:r});if(r==='○')w++;else if(r==='×')l++;if(m.kind==='official'&&(w>=needWins(m)||l>=needWins(m)))over=true;};
  for(let i=0;i<m.events.length;i++){
   const ev=m.events[i];
-  if(st.ended){if(over||st.si+1>=m.sets.length){orphan++;continue;}st=initSet(m,st.si+1);}
+  if(st.ended){if(over||st.si+1>=m.sets.length){orphan++;continue;}st=initSet(m,st.si+1,st);}
   const p=P[ev.k];if(!p)continue;
   const server=st.side==='自'?(st.order[st.slot-1]||''):'';
   let who=ev.p||'';
@@ -411,6 +412,7 @@ function replay(m){
   if((p.res==='得'||p.res==='失')&&st.scRow){st.scRow.out=p.res;st.scRow.endK=ev.k;}
   if(ev.k==='pchg'){row.who='';if(Array.isArray(ev.pos)&&ev.pos.length===st.pos.length){row.pfrom=st.pos.slice();row.pto=ev.pos.slice();st.pos=ev.pos.slice();}else row.bad=true;}
   if(ev.k==='sub'){row.who='';row.out=ev.p||'';const a=st.order.indexOf(ev.p);if(a>=0&&ev.in&&st.order.indexOf(ev.in)<0){st.order[a]=ev.in;const b=st.pos.indexOf(ev.p);if(b>=0)st.pos[b]=ev.in;}else row.bad=true;}
+  if(p.res==='得'||p.res==='失')st.lr={side:st.side,slot:st.slot};
   if(p.res==='得')st.us++;else if(p.res==='失')st.them++;
   if(p.res==='失'&&st.side==='自')st.slot=st.slot%n+1;
   if(p.res==='得')st.side='自';else if(p.res==='失')st.side='相';
@@ -422,10 +424,10 @@ function replay(m){
  }
  if(!st.ended&&rows.some(r=>r.si===st.si))sums.push({si:st.si,set:st.set,opp:setOpp(m,st.si),us:st.us,them:st.them,done:false,res:'途中'});
  let cur=st,needSet=false;
- if(st.ended&&!over){if(st.si+1<m.sets.length)cur=initSet(m,st.si+1);else needSet=true;}
+ if(st.ended&&!over){if(st.si+1<m.sets.length)cur=initSet(m,st.si+1,st);else needSet=true;}
  cur.server=cur.side==='自'?(cur.order[cur.slot-1]||''):'';
  cur.next=cur.side==='自'?(cur.order[cur.slot%n]||''):(cur.order[cur.slot-1]||'');
- return {rows,sums,cur,over,needSet,w,l,orphan,lastRow:rows[rows.length-1]};
+ return {rows,sums,cur,over,needSet,w,l,orphan,ends,lastRow:rows[rows.length-1]};
 }
 function resultLabel(m,R){
  if(!m.events.length)return '未記録';
@@ -904,6 +906,7 @@ function vOrder(m){
   h+=`<div class="card"><div class="row" style="justify-content:space-between"><b style="flex:0 0 auto">第${i+1}セット${op?' vs '+esc(op):''}</b><span class="sub" style="flex:0 0 auto">${s.first==='自'?'自チーム':'相手'}サーブから・${s.target}点</span></div>`;
   if(nine)h+='<div style="margin:10px 0">'+court(m,s)+'</div>';
   else if(hasPos(m,s))h+='<div class="olist" style="grid-template-columns:7.5em 1fr;margin-top:8px">'+POS6C.map((pn,k)=>`<div class="sub">${pn}</div><div><b>${esc(s.pos[k]?nm(m,s.pos[k]):'-')}</b></div>`).join('')+'</div>';
+  if(i>0){const e=replay(m).ends[i-1];const sl=s.start==='cont'?(e?e.next:null):(+s.start||1);h+=`<p class="sub" style="margin:8px 0 0">自チームの最初のサーバー: <b>${sl?sl+'番 '+esc(nm(m,s.order[sl-1])||''):'前のセットの続き(前のセットが終わると決まります)'}</b>${s.start==='cont'&&sl?'(前のセットの続き)':''}</p>`;}
   h+='<div class="olist" style="margin-top:8px">'+Array.from({length:n},(_,k)=>`<div class="no">${k+1}</div><div>${esc(s.order[k]?nm(m,s.order[k])+' '+numOf(m,s.order[k]):'未入力')}</div>`).join('')+'</div></div>';});
  const oo=oppsOf(m).filter(o=>oppPlayers(o).length||((DB.oppInfo[o]||{}).memo));
  oo.forEach(o=>{const inf=DB.oppInfo[o]||{};h+=`<div class="card"><b>相手: ${esc(o)}</b>${inf.memo?`<p class="sub" style="white-space:pre-wrap">${esc(inf.memo)}</p>`:''}<div class="olist" style="grid-template-columns:3.2em 1fr;margin-top:6px">${oppPlayers(o).map(p=>`<div class="no">${esc(p.num===''||p.num==null?'?':p.num)}</div><div>${esc(p.pos||'')} <span class="sub">${esc(p.memo||'')}</span></div>`).join('')}</div></div>`;});
@@ -944,9 +947,12 @@ function vSetup(m){
    if(i>0)h+=`<button class="btn sm" style="margin-top:10px" data-act="copyPrev" data-i="${i}">前のセットと同じ並びにする</button>`;
    if(nine){h+='<h3>ポジション(前衛5・中衛1・後衛3)</h3><div class="olist" style="grid-template-columns:7.5em 1fr">';POS9.forEach((pn,k)=>{h+=`<div class="sub">${pn}</div><select data-ch="spos" data-i="${i}" data-k="${k}">${opts(s.pos[k])}</select>`;});h+='</div>'+(pc?'':'<p class="ng">ポジションの9人とサーブ順の9人が一致していません</p>');}
    else{h+='<h3>ポジション(任意)</h3><p class="sub" style="margin:0 0 4px">入れておくと、試合中の「ポジション変更」や選手を選ぶ画面の並びに使えます。</p><div class="olist" style="grid-template-columns:7.5em 1fr">';POS6C.forEach((pn,k)=>{h+=`<div class="sub">${pn}</div><select data-ch="spos" data-i="${i}" data-k="${k}">${opts((s.pos||[])[k])}</select>`;});h+='</div>'+(pc?'':'<p class="ng">ポジションの6人とサーブ順の6人が一致していません</p>');}
+   if(i>0){const R_=replay(m),e=R_.ends[i-1],v=s.start||'1';const nx=e?e.next:null;
+    h+=`<label class="f"><span>このセットの最初のサーバー</span><select data-ch="sstart" data-i="${i}"><option value="cont" ${v==='cont'?'selected':''}>前のセットの続き${nx?`(${nx}番から)`:''}</option>${Array.from({length:n},(_,k)=>`<option value="${k+1}" ${String(v)===String(k+1)?'selected':''}>${k+1}番から</option>`).join('')}</select></label><p class="sub" style="margin:2px 0 0">${v==='cont'?(nx?`前のセットで最後にサーブしたのは${e.lastSide==='自'?'自チーム':'相手'}です。自チームは<b>${nx}番(${esc(nm(m,s.order[nx-1])||'未入力')})</b>から始まります。`:'前のセットが終わると、続きの番号が決まります。'):'選んだ番号の人から始めます。'}${nine?'9人制はサーブ順がセットでリセットされないので、ふつうは「前のセットの続き」です。':''}</p>`;
+    if(e&&e.lastSide){const want=e.lastSide==='自'?'相':'自';if(s.first!==want)h+=`<div class="banner w" style="margin-top:6px">前のセットの最後のラリーは${e.lastSide==='自'?'自チーム':'相手'}のサーブでした。規則どおりなら、このセットは<b>${want==='自'?'自チーム':'相手'}</b>のサーブから始まります。<button class="btn sm" style="margin-top:6px" data-act="sfirst" data-i="${i}" data-v="${want}">${want==='自'?'自チーム':'相手'}のサーブにする</button></div>`;}}
    h+=`<h3>サーブ順(${n}人)</h3><div class="olist">`;
    for(let k=0;k<n;k++){const dup=s.order[k]&&s.order.indexOf(s.order[k])!==k;h+=`<div class="no">${k+1}</div><select data-ch="sord" data-i="${i}" data-k="${k}" style="${dup?'border-color:var(--loss)':''}">${opts(s.order[k])}</select>`;}
-   h+='</div><p class="sub">1番がこのセットの最初のサーバー。自チームがサーブ権を失うたびに次の番号へ進みます(位置のローテーションはしません)。</p>';
+   h+=`</div><p class="sub">${i>0?'上で選んだ番号の人が、このセットで自チームの最初のサーバーです。':'1番がこのセットの最初のサーバー。'}自チームがサーブ権を失うたびに次の番号へ進みます(位置のローテーションはしません)。</p>`;
    if(m.kind==='practice'&&m.sets.length>1&&i===m.sets.length-1&&!replay(m).rows.some(r=>r.si===i))h+=`<button class="btn sm danger" data-act="delSet" data-i="${i}">このセットを削除</button>`;
   }
   h+='</div>';});
@@ -1509,6 +1515,7 @@ const CH={
  mf:e=>{const m=curM();m[e.dataset.k]=e.value.trim?e.value.trim():e.value;touch(m);render();},
  sf:e=>{const m=curM(),s=m.sets[+e.dataset.i];s[e.dataset.k]=e.dataset.k==='target'?Math.max(1,parseInt(e.value)||21):e.value.trim();touch(m);render();},
  sord:e=>{const m=curM();m.sets[+e.dataset.i].order[+e.dataset.k]=e.value;touch(m);render();},
+ sstart:e=>{const m=curM();m.sets[+e.dataset.i].start=e.value==='cont'?'cont':+e.value;touch(m);render();},
  spos:e=>{const m=curM(),st=m.sets[+e.dataset.i],n=isNine(m)?9:6;if(!Array.isArray(st.pos)||st.pos.length!==n)st.pos=Array.from({length:n},(_,k)=>(st.pos||[])[k]||'');st.pos[+e.dataset.k]=e.value;touch(m);render();},
  memToggle:e=>{const m=curM(),id=e.dataset.id;if(e.checked){const p=teamOf(m.teamId).players.find(x=>x.id===id);if(p&&!m.members.some(x=>x.id===id))m.members.push({id:p.id,num:p.num,name:p.name,pos:p.pos||''});}else{const used=m.events.some(v=>v.p===id||v.in===id)||m.sets.some(s=>s.order.includes(id)||(s.pos||[]).includes(id));if(used){toast('記録やサーブ順で使われているので外せません');e.checked=true;return;}m.members=m.members.filter(x=>x.id!==id);}touch(m);render();},
  af:e=>{UI.agg[e.dataset.k]=e.value;saveUI();render();},
