@@ -257,7 +257,7 @@ body.capture .printonly{display:block}
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 <script>
 'use strict';
-const APPV='1.13.2';
+const APPV='1.13.3';
 const STORE='volleyRec.v1';
 const POS9=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト'];
 // key, label, 得失, 分類, 選手入力(req=必須/opt=任意/auto=サーバー自動/none=不要/sub), 表示(any/self=自サーブ中/opp=相手サーブ中), 限定(nine/practice)
@@ -269,6 +269,7 @@ const PLAYS=[
  ['ace','サーブ得点(エース)','得','決定','auto','self'],
  ['o_serve','相手サーブミス','得','相手ミス','none','opp'],
  ['o_spike','相手スパイクミス','得','相手ミス','none','any'],
+ ['suikomi','相手ブロック吸い込み','得','相手ミス','none','any'],
  ['o_recv','相手レシーブミス','得','相手ミス','none','any'],
  ['o_foul','相手の反則','得','相手ミス','foul','any'],
  ['o_other','相手その他ミス','得','相手ミス','none','any'],
@@ -283,6 +284,7 @@ const PLAYS=[
  ['foul','自チームの反則','失','自ミス','foul','any'],
  ['blocked','被ブロック(止められた)','失','被決定','opt','any'],
  ['blockout_x','被ブロックアウト','失','被決定','opt','any'],
+ ['suikomi_x','ブロック吸い込み','失','自ミス','req','any'],
  ['spiked','被スパイク決定','失','被決定','opt','any'],
  ['feinted','被フェイント決定','失','被決定','opt','any'],
  ['l_other','その他(失点)','失','その他','opt','any'],
@@ -299,17 +301,18 @@ const P={};PLAYS.forEach(a=>P[a[0]]={k:a[0],label:a[1],res:a[2],cls:a[3],need:a[
 const GAIN=PLAYS.filter(a=>a[2]==='得').map(a=>a[0]);
 const LOSS=PLAYS.filter(a=>a[2]==='失').map(a=>a[0]);
 const SCORE_K=['spike','feint','block','blockout','ace'];
-const MISS_K=['serve_miss','r_serve','r_spike','r_other','spike_miss','connect','omiai','foul'];
+const MISS_K=['serve_miss','r_serve','r_spike','r_other','spike_miss','connect','omiai','foul','suikomi_x'];
 const LAND_K=['spiked','feinted','o_ace'];
 const SPK_K=['spike','feint','blockout','spike_miss','blocked'];
+const SPK_IN=['spike','feint'];
 const OUT_OK=['spike_miss','srvc','serve1','serve_miss'];
 const MODES=[['simple','かんたん','得点・失点の種類と選手だけ'],['std','標準','＋サーブカット(A・B・C)'],['detail','くわしく','＋決められた場所・スパイクコース・サーブコース']];
 function modeOf(m){return (m&&m.mode)||'std';}
-const OPTS=[['rcv','サーブカット','相手サーブのたびに、受けた選手とA・B・C・ダイレクト'],['srv','サーブコース','自チームのサーブのたびに、相手コートのどこに打ったか'],['spk','スパイクコース','スパイク・フェイントなどの決定・ミス・被ブロックのコース'],['land','決められた場所','被スパイク・被フェイント・相手サービスエースが自コートのどこに落ちたか'],['foul','反則の種類','ドリブル・タッチネットなどの種類']];
+const OPTS=[['rcv','サーブカット','相手サーブのたびに、受けた選手とA・B・C・ダイレクト'],['srv','サーブコース','自チームのサーブのたびに、相手コートのどこに打ったか'],['spk','スパイクコース','スパイク決定・フェイントのコース'],['land','決められた場所','被スパイク・被フェイント・相手サービスエースが自コートのどこに落ちたか'],['foul','反則の種類','ドリブル・タッチネットなどの種類']];
 function optOn(m,k){if(m&&m.opt&&k in m.opt)return !!m.opt[k];const md=modeOf(m);if(k==='rcv')return md!=='simple'&&!(m&&m.rcvOn===false);if(k==='srv')return md==='detail'&&!(m&&m.srvOn===false);if(k==='foul')return true;return md==='detail';}
 function optsOf(m){const o={};OPTS.forEach(([k])=>o[k]=optOn(m,k));return o;}
 function optsHTML(m){return `<div class="optl">${OPTS.map(([k,l,d])=>`<label class="mcheck"><input type="checkbox" data-ch="optT" data-k="${k}" ${optOn(m,k)?'checked':''}><span><b>${l}</b><br><span class="sub">${d}</span></span></label>`).join('')}</div><label class="mcheck ofl"><input type="checkbox" data-ch="flipT" ${m.flip?'checked':''}><span><b>コートの向きを反転(180度)</b><br><span class="sub">コートチェンジで自分の見ている向きが変わったときに。コート図と選手の並びが上下・左右逆になります(記録される場所は同じです)</span></span></label>`;}
-function courtKind(m,k){if(LAND_K.includes(k))return optOn(m,'land')?'own':null;if(SPK_K.includes(k))return optOn(m,'spk')?'opp':null;return null;}
+function courtKind(m,k){if(LAND_K.includes(k))return optOn(m,'land')?'own':null;if(SPK_IN.includes(k))return optOn(m,'spk')?'opp':null;return null;}
 function kindOfCourt(k){return LAND_K.includes(k)?'own':(SPK_K.includes(k)||OUT_OK.includes(k))?'opp':null;}
 function zoneOpp(x,y){if(x<0||x>1||y<0||y>1)return 'アウト('+(y<0?'奥':x<0?'左':x>1?'右':'手前')+')';return (y<1/3?'奥':y<2/3?'中':'前')+'・'+(x<1/3?'左':x<2/3?'中央':'右');}
 function zoneFor(k,x,y){return kindOfCourt(k)==='own'?zoneOf(x,y):zoneOpp(x,y);}
@@ -319,7 +322,7 @@ function dirOf(r){if(r.lx==null)return '';const pi=(r.posB||[]).indexOf(r.who);i
 const LAND_STYLE={spiked:{c:'var(--loss)',sh:'c',lab:'被スパイク決定'},feinted:{c:'var(--warn)',sh:'t',lab:'被フェイント決定'},o_ace:{c:'var(--pri2)',sh:'s',lab:'相手サービスエース'}};
 function zoneOf(x,y){return (y<1/3?'前':y<2/3?'中':'後')+'・'+(x<1/3?'左':x<2/3?'中央':'右');}
 const FOULS=['ドリブル','オーバータイムス','オーバーネット','タッチネット','ホールディング'];
-const OPP_K=['o_ace','blocked','blockout_x','spiked','feinted','o_serve','o_spike','o_recv','o_foul','o_other'];
+const OPP_K=['o_ace','blocked','blockout_x','spiked','feinted','o_serve','o_spike','o_recv','o_foul','o_other','suikomi','suikomi_x'];
 const POS6=['レフト','センター','ライト','セッター','前衛','後衛'];
 const GRADE={A:'セッターほぼ動かず・全攻撃OK',B:'セッター1〜2歩・速攻/サイド可',C:'セッター大きく移動・オープン/2段',O:'相手コートへ直接返った'};
 const GR=['A','B','C','O'];const GLAB={A:'A',B:'B',C:'C',O:'ダイレクト'};
@@ -700,7 +703,7 @@ function bars(keys,S,total,cls,groups,nine){
  h+='<p class="sub" style="margin:6px 0 0">項目をタップすると、誰が何点かが出ます。</p>';
  return h+'</div>';
 }
-function pcols(nine){return [['得点','_score'],['スパイク','spike'],['フェイント','feint'],['ブロック','block'],['Bアウト','blockout'],['エース','ace'],...(nine?[['1本目ミス','serve1']]:[]),[nine?'2本目ミス':'サーブミス','serve_miss'],['サーブカットミス','r_serve'],['レシーブミス','_recv'],['スパイクミス','spike_miss'],['つなぎミス','connect'],['お見合い','omiai'],['反則','foul'],['被ブロック','blocked'],['ミス計','_miss'],['得失差','_diff'],['サーブ本数','_srvT'],['サーブ中得点率','_srvP']];}
+function pcols(nine){return [['得点','_score'],['スパイク','spike'],['フェイント','feint'],['ブロック','block'],['Bアウト','blockout'],['エース','ace'],...(nine?[['1本目ミス','serve1']]:[]),[nine?'2本目ミス':'サーブミス','serve_miss'],['サーブカットミス','r_serve'],['レシーブミス','_recv'],['スパイクミス','spike_miss'],['つなぎミス','connect'],['お見合い','omiai'],['反則','foul'],['吸い込み','suikomi_x'],['被ブロック','blocked'],['ミス計','_miss'],['得失差','_diff'],['サーブ本数','_srvT'],['サーブ中得点率','_srvP']];}
 function pval(x,c){if(c==='_score')return x.score;if(c==='_miss')return x.miss;if(c==='_diff')return x.score-x.miss;if(c==='_srvT')return x.srvT;if(c==='_srvP')return pct(x.srvW,x.srvT);if(c==='_recv')return (x.k.r_spike||0)+(x.k.r_other||0);return x.k[c]||0;}
 function ptable(S,nine,orderNames){
  let list=Object.values(S.pl);
@@ -713,7 +716,7 @@ function ptable(S,nine,orderNames){
  list.forEach(x=>{h+='<tr><td><b>'+esc(x.name)+'</b></td>'+cols.map(c=>{const v=pval(x,c[1]);const cl=c[1]==='_diff'?(v>0?'g':v<0?'l':''):'';return `<td class="${cl}">${v===0?'<span class="sub">0</span>':esc(v)}</td>`}).join('')+'</tr>';
   Object.keys(x.k).forEach(k=>tot.k[k]=(tot.k[k]||0)+x.k[k]);tot.srvT+=x.srvT;tot.srvW+=x.srvW;tot.score+=x.score;tot.miss+=x.miss;});
  h+='<tr class="tot"><td>合計</td>'+cols.map(c=>`<td>${esc(pval(tot,c[1]))}</td>`).join('')+'</tr>';
- return h+'</table></div><p class="sub">得点=スパイク・フェイント・ブロック・ブロックアウト・エース。ミス計=サーブ'+(nine?'2本目':'')+'ミス・サーブカット・レシーブ(スパイク/その他)・スパイク・つなぎ・反則'+(nine?'(1本目ミス・被ブロックは別枠)':'(被ブロックは別枠)')+'。</p>';
+ return h+'</table></div><p class="sub">得点=スパイク・フェイント・ブロック・ブロックアウト・エース。ミス計=サーブ'+(nine?'2本目':'')+'ミス・サーブカット・レシーブ(スパイク/その他)・スパイク・つなぎ・お見合い・反則・ブロック吸い込み'+(nine?'(1本目ミス・被ブロックは別枠)':'(被ブロックは別枠)')+'。</p>';
 }
 function slotTable(S,n,names){
  let h='<div class="tbl"><table><tr><th>サーブ順</th>'+(names?'<th>先発</th>':'')+'<th>サイドアウト率</th><th>サイドアウト</th><th>ブレイク率</th><th>ブレイク</th></tr>';
@@ -1169,7 +1172,7 @@ function renderSheet(){
   const nine=isNine(m),p=P[r.k];const who=evWho(m,r);
   const hasOps=OPP_K.includes(r.k)&&oppPlayers(r.opp).length;
   h+=`<h2>記録を直す</h2><div class="evhead">第${r.set}セット ${r.us}-${r.them}<br><b>${esc(evLabel(r,nine))}</b> ${esc(who)}${r.op?' / 相手'+esc(oppPlLabel(r.opp,r.op)):''}</div>`;
-  h+=`<div class="pgrid"><button class="btn" data-act="evEditK">プレーを変える</button>${p.need!=='none'||hasOps?`<button class="btn" data-act="evEditP">${r.k==='sub'?'交代の選手を変える':r.k==='rcv'?'選手・評価を変える':p.need==='foul'?'選手・反則の種類を変える':p.need==='pchg'?'ポジションを変える':p.need==='multi'?'お見合いの選手を変える':p.need==='none'?'相手の選手を変える':'選手を変える'}</button>`:'<span></span>'}${kindOfCourt(r.k)&&(optOn(m,LAND_K.includes(r.k)?'land':SPK_K.includes(r.k)?'spk':'srv')||r.lx!=null)&&!(r.k==='serve1'&&r.side!=='自')?`<button class="btn" data-act="evLand">${r.lx!=null?'場所を変える('+zoneFor(r.k,r.lx,r.ly)+')':'場所を記録する'}</button><span></span>`:''}<button class="btn" data-act="evIns" data-at="${r.i}">この直前に追加</button><button class="btn" data-act="evIns" data-at="${r.i+1}">この直後に追加</button></div>`;
+  h+=`<div class="pgrid"><button class="btn" data-act="evEditK">プレーを変える</button>${p.need!=='none'||hasOps?`<button class="btn" data-act="evEditP">${r.k==='sub'?'交代の選手を変える':r.k==='rcv'?'選手・評価を変える':p.need==='foul'?'選手・反則の種類を変える':p.need==='pchg'?'ポジションを変える':p.need==='multi'?'お見合いの選手を変える':p.need==='none'?'相手の選手を変える':'選手を変える'}</button>`:'<span></span>'}${kindOfCourt(r.k)&&(r.lx!=null||(LAND_K.includes(r.k)?optOn(m,'land'):SPK_IN.includes(r.k)?optOn(m,'spk'):SPK_K.includes(r.k)?false:optOn(m,'srv')))&&!(r.k==='serve1'&&r.side!=='自')?`<button class="btn" data-act="evLand">${r.lx!=null?'場所を変える('+zoneFor(r.k,r.lx,r.ly)+')':'場所を記録する'}</button><span></span>`:''}<button class="btn" data-act="evIns" data-at="${r.i}">この直前に追加</button><button class="btn" data-act="evIns" data-at="${r.i+1}">この直後に追加</button></div>`;
   h+=`<p class="sub">入れ忘れは「直前/直後に追加」で間に入れられます。直すと、その後のスコア・サーブ順は自動で計算し直されます。</p><div class="row" style="margin-top:8px"><button class="btn" data-act="closeSheet">やめる</button><button class="btn danger" data-act="delEv" data-i="${s.i}">削除する</button></div>`;
  }
  el.innerHTML=`<div class="shbg" data-act="bgClose"><div class="pane" data-stop="1">${h}</div></div>`;
@@ -1300,7 +1303,7 @@ async function makeLink(ms,title){
  openSheet({type:'link',url,count:ms.length,title});
 }
 /* 共有リンク用の詰め込み(v3) ※EVCとPOSCは後ろに足すだけ(並べ替え・削除しない) */
-const EVC=['spike','feint','block','blockout','ace','o_serve','o_spike','o_recv','o_foul','o_other','o_ace','r_serve','r_spike','r_other','serve_miss','spike_miss','connect','omiai','foul','blocked','blockout_x','spiked','feinted','l_other','serve1','rcv','srvc','sub','set_end','pchg','to_own','to_opp'];
+const EVC=['spike','feint','block','blockout','ace','o_serve','o_spike','o_recv','o_foul','o_other','o_ace','r_serve','r_spike','r_other','serve_miss','spike_miss','connect','omiai','foul','blocked','blockout_x','spiked','feinted','l_other','serve1','rcv','srvc','sub','set_end','pchg','to_own','to_opp','suikomi','suikomi_x'];
 const C64='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-.';
 const POSC=['レフト','中打ち(レフト)','セッター','中打ち(ライト)','ライト','ハーフ','バックレフト','バックセンター','バックライト','センター','前衛','後衛'];
 function packEv(ev){if(ev.some(a=>!EVC.includes(a[0])||(a[1]&&a[1].length>1)))return null;
