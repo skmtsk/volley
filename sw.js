@@ -1,5 +1,5 @@
 // オフライン対応: 電波があるときは最新版を取りに行き、ないときは保存した版で起動する
-const CACHE = 'volley-rec-v1.13.4';
+const CACHE = 'volley-rec-v1.14.0';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './html-to-image.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
